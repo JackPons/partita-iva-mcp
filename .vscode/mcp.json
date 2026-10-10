@@ -1,0 +1,9 @@
+{
+  "servers": {
+    "partita-iva-locale": {
+      "type": "stdio",
+      "command": "npx",
+      "args": ["tsx", "src/stdio.ts"]
+    }
+  }
+}

@@ -1,0 +1,29 @@
+{
+ "_fonte": "SEED — tabella parziale compilata a mano, da verificare ed estendere (vedi README)",
+ "abi": {
+  "01005": "BNL - Banca Nazionale del Lavoro",
+  "01015": "Banco di Sardegna",
+  "01030": "Banca Monte dei Paschi di Siena",
+  "02008": "UniCredit",
+  "03015": "FinecoBank",
+  "03032": "Credito Emiliano (Credem)",
+  "03058": "Mediobanca Premier (ex CheBanca!)",
+  "03062": "Banca Mediolanum",
+  "03069": "Intesa Sanpaolo",
+  "03075": "Banca Generali",
+  "03104": "Deutsche Bank S.p.A.",
+  "03205": "Banca Ifis",
+  "03268": "Banca Sella",
+  "03395": "illimity Bank",
+  "03440": "Banco di Desio e della Brianza",
+  "03442": "Banca Widiba",
+  "03599": "Cassa Centrale Banca",
+  "05034": "Banco BPM",
+  "05387": "BPER Banca",
+  "05696": "Banca Popolare di Sondrio",
+  "06230": "Crédit Agricole Italia",
+  "07601": "Poste Italiane (BancoPosta)",
+  "08000": "ICCREA Banca",
+  "10631": "Mediobanca"
+ }
+}

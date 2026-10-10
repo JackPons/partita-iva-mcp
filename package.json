@@ -1,0 +1,37 @@
+{
+  "name": "partita-iva-mcp",
+  "version": "0.2.0",
+  "description": "Server MCP per la verifica di partite IVA, codici fiscali e IBAN italiani, con arricchimento da fonti ufficiali gratuite (VIES, IPA, ISTAT, sanzioni UE).",
+  "type": "module",
+  "license": "MIT",
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "italia",
+    "partita-iva",
+    "codice-fiscale",
+    "iban",
+    "vies",
+    "kyc"
+  ],
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "stdio": "tsx src/stdio.ts",
+    "inspect": "npx @modelcontextprotocol/inspector tsx src/stdio.ts",
+    "test": "node --import tsx --test test/*.test.ts",
+    "typecheck": "tsc --noEmit",
+    "dati": "tsx scripts/aggiorna-dati.ts"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.32.1",
+    "zod": "^4.1.0"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^5.20261006.1",
+    "@types/node": "^22.0.0",
+    "tsx": "^4.20.0",
+    "typescript": "^5.9.0",
+    "wrangler": "^4.149.0"
+  }
+}
