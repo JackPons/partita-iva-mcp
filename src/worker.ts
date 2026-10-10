@@ -55,7 +55,7 @@ function paginaIniziale(origin: string): Response {
   const html = `<!doctype html><meta charset="utf-8"><title>${SERVER_INFO.name}</title>
 <style>body{font:16px/1.5 system-ui;max-width:42rem;margin:3rem auto;padding:0 1rem;color:#222}code,pre{background:#f3f3f3;padding:.1em .3em;border-radius:4px}</style>
 <h1>${SERVER_INFO.name} <small>v${SERVER_INFO.version}</small></h1>
-<p>Server MCP per verificare partite IVA, codici fiscali e IBAN italiani, con arricchimento da VIES e IPA. Gratuito, senza registrazione.</p>
+<p>Server MCP per verificare partite IVA, codici fiscali e IBAN italiani, con arricchimento da VIES, IPA e GLEIF. Gratuito, senza registrazione.</p>
 <p><strong>Endpoint MCP:</strong> <code>${origin}/mcp</code> (Streamable HTTP)</p>
 <h2>Collegamento rapido</h2>
 <pre>claude mcp add partita-iva -t http ${origin}/mcp</pre>
@@ -63,13 +63,13 @@ function paginaIniziale(origin: string): Response {
 <pre>{ "mcpServers": { "partita-iva": { "url": "${origin}/mcp" } } }</pre>
 <h2>Strumenti</h2>
 <ul>
-<li><code>scheda_soggetto</code>: quadro completo da partita IVA (VIES, sede su ISTAT, IPA, screening sanzioni UE)</li>
+<li><code>scheda_soggetto</code>: quadro completo da partita IVA (VIES, sede su ISTAT, IPA, LEI e gruppo da GLEIF, screening sanzioni UE)</li>
 <li><code>verifica_partita_iva</code>: stato su VIES</li>
 <li><code>valida_partita_iva</code>, <code>valida_codice_fiscale</code>, <code>valida_iban</code>: validazione offline</li>
 <li><code>cerca_comune</code>: comuni ISTAT per nome o codice catastale</li>
 <li><code>controlla_sanzioni</code>: screening indicativo sulla lista sanzioni UE</li>
 </ul>
-<p>Fonti: VIES (Commissione Europea), IPA (indicepa.gov.it), ISTAT, lista consolidata sanzioni UE. I dati restituiti sono soggetti alle licenze delle fonti originali.</p>
+<p>Fonti: VIES (Commissione Europea), IPA (indicepa.gov.it), GLEIF (CC0), ISTAT, lista consolidata sanzioni UE. I dati restituiti sono soggetti alle licenze delle fonti originali.</p>
 <p><a href="/privacy">Informativa privacy</a> · <a href="https://github.com/JackPons/partita-iva-mcp">Codice e documentazione</a></p>`;
   return new Response(html, { headers: { "content-type": "text/html; charset=utf-8" } });
 }

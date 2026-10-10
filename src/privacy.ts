@@ -55,6 +55,7 @@ export function paginaPrivacy(opts: { titolare?: string; email?: string; nomeSer
 <ul>
 <li><strong>VIES</strong> (Commissione Europea): per gli strumenti <code>verifica_partita_iva</code> e <code>scheda_soggetto</code> la partita IVA viene inviata a VIES per verificarne lo stato.</li>
 <li><strong>IPA – Indice delle Pubbliche Amministrazioni</strong> (AgID, indicepa.gov.it): per <code>scheda_soggetto</code> la partita IVA viene cercata nell'indice per riconoscere gli enti pubblici.</li>
+<li><strong>GLEIF</strong> (Global Legal Entity Identifier Foundation, api.gleif.org): per <code>scheda_soggetto</code> la partita IVA viene cercata nel registro pubblico dei LEI per recuperare forma giuridica e gruppo societario.</li>
 <li><strong>Cloudflare</strong>: fornitore di hosting del servizio e del database delle statistiche. Cloudflare può trattare dati tecnici di connessione (come l'indirizzo IP) per erogare e proteggere il servizio, secondo la propria informativa.</li>
 </ul>
 <p>Gli altri strumenti (codice fiscale, IBAN, comuni, sanzioni UE) funzionano su tabelle locali e non inviano dati a terzi.</p>
@@ -70,7 +71,7 @@ export function paginaPrivacy(opts: { titolare?: string; email?: string; nomeSer
 
 <hr>
 <h2 lang="en">English summary</h2>
-<p lang="en">Tool arguments (VAT numbers, tax codes, IBANs, names) are processed in memory and <strong>never stored</strong>. We store only usage metadata (timestamp, tool, outcome, duration, client name, country) for 90 days; IP addresses are not stored, only a keyed hash that rotates daily. VAT numbers are sent to VIES (European Commission) and IPA (Italian public administration index) only for the tools that query them. Hosting by Cloudflare. No cookies, tracking or data sales. Contact: ${contatto}.</p>
+<p lang="en">Tool arguments (VAT numbers, tax codes, IBANs, names) are processed in memory and <strong>never stored</strong>. We store only usage metadata (timestamp, tool, outcome, duration, client name, country) for 90 days; IP addresses are not stored, only a keyed hash that rotates daily. VAT numbers are sent to VIES (European Commission) IPA (Italian public administration index) and GLEIF (LEI registry) only for the tools that query them. Hosting by Cloudflare. No cookies, tracking or data sales. Contact: ${contatto}.</p>
 </body>
 </html>`;
   return new Response(html, { headers: { "content-type": "text/html; charset=utf-8", "cache-control": "public, max-age=3600" } });

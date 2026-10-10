@@ -5,6 +5,7 @@ import { validaCodiceFiscale } from "./lib/codice-fiscale.js";
 import { validaIban } from "./lib/iban.js";
 import { interrogaVies } from "./lib/vies.js";
 import { cercaInIpa } from "./lib/ipa.js";
+import { cercaLei } from "./lib/gleif.js";
 import { controllaSanzioni } from "./lib/sanzioni.js";
 import { cercaComune, comuneDaCatastale, infoTabelle } from "./lib/tabelle.js";
 import {
@@ -21,7 +22,7 @@ import {
 
 export const SERVER_INFO = {
   name: "partita-iva-mcp",
-  version: "0.4.2",
+  version: "0.5.0",
 };
 
 function json(payload: unknown) {
@@ -160,7 +161,8 @@ export function creaServer(fetchImpl: typeof fetch = fetch): McpServer {
       description:
         "Quadro completo di un soggetto italiano a partire dalla partita IVA: controllo formale, stato su VIES con denominazione " +
         "e indirizzo normalizzato (via, CAP, comune ISTAT, provincia, regione), screening sanzioni UE sulla denominazione, " +
-        "e se il soggetto è una Pubblica Amministrazione i dati IPA (codice IPA, PEC, sito). " +
+        "se il soggetto è una Pubblica Amministrazione i dati IPA (codice IPA, PEC, sito), " +
+        "e per le imprese con LEI i dati GLEIF: forma giuridica, stato del LEI, controllante diretta, capogruppo e numero di controllate. " +
         "Ogni blocco indica la fonte e se il servizio era raggiungibile. " +
         "Per un'azienda privata la scheda non include soci, cariche o bilanci (dati a pagamento del Registro Imprese).",
       inputSchema: {
@@ -173,11 +175,12 @@ export function creaServer(fetchImpl: typeof fetch = fetch): McpServer {
     async ({ partita_iva, sanzioni }) => {
       const formale = validaPartitaIva(partita_iva);
       if (!formale.valida) {
-        return json({ formale, vies: null, ipa: null, sanzioni: null, riepilogo: "Partita IVA formalmente non valida: nessuna fonte interrogata." });
+        return json({ formale, vies: null, ipa: null, gleif: null, sanzioni: null, riepilogo: "Partita IVA formalmente non valida: nessuna fonte interrogata." });
       }
-      const [vies, ipa] = await Promise.all([
+      const [vies, ipa, gleif] = await Promise.all([
         interrogaVies(formale.normalizzata, fetchImpl),
         cercaInIpa(formale.normalizzata, fetchImpl),
+        cercaLei(formale.normalizzata, fetchImpl),
       ]);
       const esitoSanzioni = sanzioni !== false && vies.denominazione ? controllaSanzioni(vies.denominazione) : null;
 
@@ -186,11 +189,17 @@ export function creaServer(fetchImpl: typeof fetch = fetch): McpServer {
       else parti.push(vies.attiva ? `partita IVA attiva${vies.denominazione ? ` (${vies.denominazione})` : ""}` : "partita IVA NON attiva su VIES");
       if (vies.indirizzo?.comune_riconosciuto) parti.push(`sede a ${vies.indirizzo.comune} (${vies.indirizzo.provincia})`);
       if (ipa.e_pubblica_amministrazione) parti.push(`Pubblica Amministrazione, codice IPA ${ipa.codice_ipa}`);
+      if (gleif.trovato) {
+        let g = `LEI ${gleif.lei}${gleif.stato_registrazione_lei && gleif.stato_registrazione_lei !== "ISSUED" ? ` (stato ${gleif.stato_registrazione_lei})` : ""}`;
+        if (gleif.capogruppo && gleif.capogruppo.lei !== gleif.lei) g += `, parte del gruppo ${gleif.capogruppo.denominazione ?? gleif.capogruppo.lei}`;
+        else if (gleif.numero_controllate_dirette) g += `, controlla ${gleif.numero_controllate_dirette} società`;
+        parti.push(g);
+      }
       else if (!ipa.servizio_disponibile) parti.push("IPA non raggiungibile");
       if (esitoSanzioni?.esito === "da_verificare") parti.push(`ATTENZIONE: ${esitoSanzioni.possibili_corrispondenze.length} possibili corrispondenze in lista sanzioni UE`);
       else if (esitoSanzioni?.esito === "lista_non_caricata") parti.push("lista sanzioni non caricata");
 
-      return json({ formale, vies, ipa, sanzioni: esitoSanzioni, riepilogo: parti.join("; ") + "." });
+      return json({ formale, vies, ipa, gleif, sanzioni: esitoSanzioni, riepilogo: parti.join("; ") + "." });
     },
   );
 

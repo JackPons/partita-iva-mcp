@@ -1,8 +1,57 @@
-# partita-iva-mcp
+# Verika · partita-iva-mcp
 
-Server [MCP](https://modelcontextprotocol.io/) per verificare identificativi italiani — **partita IVA, codice fiscale, IBAN** — e arricchirli con fonti ufficiali gratuite (**VIES**, **IPA**, **ISTAT**, **lista sanzioni UE**). Nessuna chiave, nessuna registrazione.
+Server [MCP](https://modelcontextprotocol.io/) per verificare identificativi italiani — **partita IVA, codice fiscale, IBAN** — e arricchirli con fonti ufficiali gratuite (**VIES**, **IPA**, **GLEIF**, **ISTAT**, **lista sanzioni UE**).
 
-Pensato per chi costruisce agenti AI che devono fare controlli su aziende ed enti italiani (onboarding, KYC leggero, fatturazione verso la PA, pulizia anagrafiche) senza integrare quattro API diverse.
+Pensato per chi usa o costruisce agenti AI che devono fare controlli su aziende ed enti italiani (onboarding, KYC leggero, fatturazione verso la PA, pulizia anagrafiche) senza integrare quattro API diverse.
+
+## Usalo subito
+
+Il server è già online, **gratuito e senza chiave**: non serve installare nulla né registrarsi.
+
+- **Endpoint**: `https://partita-iva-mcp.pons-labs.workers.dev/mcp`
+- **Trasporto**: Streamable HTTP (MCP remoto)
+- **Autenticazione**: nessuna
+
+**Claude (desktop, web, mobile)** — Impostazioni → Connettori → *Aggiungi connettore personalizzato* → incolla l'endpoint → Aggiungi. In una chat nuova attivalo da **+ → Connettori**. Richiede un piano che supporti i connettori personalizzati.
+
+**Claude Code**
+
+```bash
+claude mcp add --transport http partita-iva --scope user https://partita-iva-mcp.pons-labs.workers.dev/mcp
+```
+
+**Cursor, VS Code e altri client** con configurazione JSON:
+
+```json
+{
+  "mcpServers": {
+    "partita-iva": { "url": "https://partita-iva-mcp.pons-labs.workers.dev/mcp" }
+  }
+}
+```
+
+È pubblicato anche nel [registry ufficiale MCP](https://registry.modelcontextprotocol.io/v0.1/servers?search=io.github.JackPons/partita-iva-mcp) come `io.github.JackPons/partita-iva-mcp`.
+
+## Esempi
+
+Domande da fare all'assistente con il connettore attivo:
+
+- *"Fammi la scheda della partita IVA [una P.IVA reale, es. presa da una fattura]: è attiva? Dove ha sede?"* → `scheda_soggetto` restituisce stato VIES, denominazione, sede normalizzata su ISTAT (comune, provincia, regione), screening sanzioni, LEI con forma giuridica e gruppo societario (se l'impresa ne ha uno) e, se è una PA, codice IPA e PEC.
+- *"Questo codice fiscale è valido? RSSMRA85T10A562S. Dove è nata questa persona?"* → `valida_codice_fiscale` verifica il carattere di controllo e ricava sesso, data e luogo di nascita (qui: San Giuliano Terme, PI).
+- *"Controlla l'IBAN DE89 3704 0044 0532 0130 00"* → `valida_iban` verifica le cifre di controllo; per gli IBAN italiani scompone anche ABI, CAB e conto e indica la banca quando è nota.
+- *"Bank Rossiya è nella lista sanzioni UE?"* → `controlla_sanzioni` restituisce le possibili corrispondenze con un punteggio di somiglianza (esito `da_verificare`).
+- *"Ho una lista di 10 fornitori con partita IVA: dimmi quali non risultano attivi"* → l'assistente chiama `verifica_partita_iva` per ciascuno e riassume.
+
+Esempio di risposta di `valida_iban` (estratto):
+
+```json
+{
+  "normalizzato": "DE89370400440532013000",
+  "valido": true,
+  "paese": "DE",
+  "formattato": "DE89 3704 0044 0532 0130 00"
+}
+```
 
 ## Strumenti
 
@@ -14,11 +63,13 @@ Pensato per chi costruisce agenti AI che devono fare controlli su aziende ed ent
 | `valida_iban` | Mod 97 per tutti i paesi; per l'Italia anche CIN, ABI → **banca**, CAB, conto | no |
 | `cerca_comune` | Comune per nome o codice catastale: provincia, regione, codice ISTAT | no |
 | `controlla_sanzioni` | Screening indicativo di un nome contro la lista consolidata UE, matching tollerante con punteggio | no |
-| `scheda_soggetto` | Quadro completo da partita IVA: formale + VIES con indirizzo normalizzato su ISTAT + screening sanzioni + dati IPA se è una PA | VIES, IPA |
+| `scheda_soggetto` | Quadro completo da partita IVA: formale + VIES con indirizzo normalizzato su ISTAT + screening sanzioni + dati IPA se è una PA + LEI, forma giuridica, capogruppo e numero di controllate (GLEIF) | VIES, IPA, GLEIF |
 
 Ogni risposta indica la **fonte** e se il servizio era **raggiungibile**, così l'agente non confonde "non attiva" con "non ho potuto verificare".
 
-## Avvio rapido (locale)
+## Sviluppo locale
+
+Per modificare il server o eseguirne una copia tua. Requisiti: Node.js 22+, npm; per il deploy un account Cloudflare (piano gratuito sufficiente).
 
 ```bash
 npm install
@@ -75,11 +126,10 @@ oppure dal browser `https://<tuo-worker>/stats?token=...`. Restituisce totali, c
 
 ## Pubblicazione nei registry
 
-1. Repo pubblico su GitHub.
-2. Aggiorna `server.json` con il tuo utente GitHub e l'URL del worker.
-3. Registry ufficiale: `npx @modelcontextprotocol/publisher login github` poi `npx @modelcontextprotocol/publisher publish` (PulseMCP e Glama lo raccolgono da lì).
-4. Smithery: `npx @smithery/cli mcp publish <url> -n <utente>/partita-iva-mcp`.
-5. Catalogo italiano: PR su [bsab/italia-mcp-servers](https://github.com/bsab/italia-mcp-servers).
+1. Aggiorna `server.json` (nome `io.github.<utente>/<server>`, versione, URL con `/mcp` in fondo). Ogni pubblicazione richiede una **versione nuova**.
+2. Registry ufficiale: installa [`mcp-publisher`](https://github.com/modelcontextprotocol/registry/blob/main/docs/modelcontextprotocol-io/quickstart.mdx), poi `mcp-publisher validate`, `mcp-publisher login github`, `mcp-publisher publish`. PulseMCP e Glama lo raccolgono da lì.
+3. Smithery: da [smithery.ai/new](https://smithery.ai/new) con l'URL dell'endpoint; dopo ogni deploy, *Releases → Publish* per una nuova scansione.
+4. Catalogo italiano: PR su [bsab/italia-mcp-servers](https://github.com/bsab/italia-mcp-servers) seguendo il loro CONTRIBUTING.
 
 ## Tabelle locali (`src/data/`)
 
@@ -102,6 +152,7 @@ src/
     iban.ts
     vies.ts
     ipa.ts
+    gleif.ts      LEI, forma giuridica e gruppo
     tabelle.ts    accesso alle tabelle locali
     sanzioni.ts   matching contro la lista UE
   data/           tabelle JSON (seed → aggiornate da npm run dati)
@@ -112,13 +163,16 @@ src/
 migrations/       schema SQL del database D1
 scripts/
   aggiorna-dati.ts  scarica e converte le tabelle ufficiali
-test/             node:test, con fetch finto per VIES e IPA
+test/             node:test, con fetch finto per VIES, IPA e GLEIF
 ```
 
 ## Fonti e limiti
 
+Tutti gli strumenti sono **in sola lettura**: non modificano dati e non inviano nulla a terzi oltre alle interrogazioni a VIES, IPA e GLEIF. Rate limit: 60 richieste al minuto per utente.
+
 - **VIES** (Commissione Europea): stato della partita IVA ai fini IVA intracomunitaria. Per l'Italia restituisce di solito denominazione e indirizzo; a volte è temporaneamente non disponibile, e il server lo segnala.
 - **IPA** (indicepa.gov.it, open data CKAN): usato per riconoscere le Pubbliche Amministrazioni e recuperare codice IPA, PEC e sito.
+- **GLEIF** (api.gleif.org, licenza CC0): registro mondiale dei LEI. Ricerca per codice fiscale sulle imprese iscritte al Registro Imprese; restituisce forma giuridica, stato del LEI, controllante diretta, capogruppo e numero di controllate. Il LEI ce l'hanno soprattutto le imprese medio-grandi e chi opera sui mercati finanziari: per una piccola impresa `trovato: false` è normale.
 - **ISTAT** (elenco comuni): normalizzazione di comuni e codici catastali.
 - **Lista consolidata sanzioni UE**: screening per nome, indicativo. Non sostituisce un provider AML né il giudizio di un operatore; i nomi traslitterati (arabo, cirillico) possono sfuggire al matching su token.
 - Il server **non** accede al Registro Imprese: soci, cariche, bilanci e protesti sono dati a pagamento e restano fuori da questa versione.
@@ -133,6 +187,7 @@ I dati restituiti sono soggetti alle licenze delle fonti originali.
 - [x] Screening sanzioni UE
 - [x] Conteggio chiamate per strumento (D1), senza dati personali
 - [x] Rate limit di base
+- [x] Output schema e annotazioni read-only su tutti gli strumenti
 - [ ] API key opzionale con limiti più alti
 - [ ] CAP → comune (ISTAT/Poste)
 - [ ] ANAC (appalti aggiudicati) e RNA (aiuti di Stato) nella scheda soggetto

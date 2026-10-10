@@ -64,6 +64,26 @@ export const ipa = z.looseObject({
   errore: opt(s),
 });
 
+const soggettoCollegato = z.looseObject({ lei: s, denominazione: opt(s), paese: opt(s) });
+
+export const gleif = z.looseObject({
+  fonte: z.literal("GLEIF"),
+  trovato: z.boolean().describe("false se il soggetto non ha un LEI (normale per le piccole imprese)"),
+  lei: opt(s),
+  denominazione: opt(s),
+  forma_giuridica: opt(s),
+  stato_entita: opt(s),
+  stato_registrazione_lei: opt(s).describe("ISSUED = valido; LAPSED = non rinnovato"),
+  lei_aggiornato_al: opt(s),
+  prossimo_rinnovo_lei: opt(s),
+  sede_legale: opt(z.looseObject({ indirizzo: opt(s), cap: opt(s), comune: opt(s), paese: opt(s) })),
+  controllante_diretta: opt(soggettoCollegato.nullable()),
+  capogruppo: opt(soggettoCollegato.nullable()),
+  numero_controllate_dirette: opt(z.number()),
+  servizio_disponibile: z.boolean(),
+  errore: opt(s),
+});
+
 export const esitoSanzioni = z.looseObject({
   fonte: s,
   lista_aggiornata_al: s.nullable(),
@@ -147,6 +167,7 @@ export const outSchedaSoggetto = {
   formale: formalePartitaIva,
   vies: vies.nullable(),
   ipa: ipa.nullable(),
+  gleif: gleif.nullable().describe("Dati LEI (GLEIF); null se la P.IVA è formalmente errata"),
   sanzioni: esitoSanzioni.nullable().describe("null se la P.IVA è formalmente errata, se VIES non dà una denominazione o se disattivato"),
   riepilogo: s.describe("Una frase di sintesi per l'utente"),
 };
