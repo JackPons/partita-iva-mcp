@@ -7,10 +7,21 @@ import { interrogaVies } from "./lib/vies.js";
 import { cercaInIpa } from "./lib/ipa.js";
 import { controllaSanzioni } from "./lib/sanzioni.js";
 import { cercaComune, comuneDaCatastale, infoTabelle } from "./lib/tabelle.js";
+import {
+  ANNOTAZIONI_OFFLINE,
+  ANNOTAZIONI_ONLINE,
+  outCercaComune,
+  outControllaSanzioni,
+  outSchedaSoggetto,
+  outValidaCodiceFiscale,
+  outValidaIban,
+  outValidaPartitaIva,
+  outVerificaPartitaIva,
+} from "./schemi.js";
 
 export const SERVER_INFO = {
   name: "partita-iva-mcp",
-  version: "0.3.1",
+  version: "0.4.0",
 };
 
 function json(payload: unknown) {
@@ -45,6 +56,8 @@ export function creaServer(fetchImpl: typeof fetch = fetch): McpServer {
         nome: z.string().describe("Denominazione o nome e cognome da verificare"),
         soglia: z.number().min(0.5).max(1).optional().describe("Soglia di somiglianza (default 0.8)"),
       },
+      outputSchema: outControllaSanzioni,
+      annotations: ANNOTAZIONI_OFFLINE,
     },
     async ({ nome, soglia }) => json(controllaSanzioni(nome, { soglia })),
   );
@@ -61,6 +74,8 @@ export function creaServer(fetchImpl: typeof fetch = fetch): McpServer {
         provincia: z.string().length(2).optional().describe("Sigla provincia per disambiguare, es. 'TE'"),
         codice_catastale: z.string().length(4).optional().describe("Codice catastale, es. 'A562'"),
       },
+      outputSchema: outCercaComune,
+      annotations: ANNOTAZIONI_OFFLINE,
     },
     async ({ nome, provincia, codice_catastale }) => {
       if (codice_catastale) {
@@ -83,6 +98,8 @@ export function creaServer(fetchImpl: typeof fetch = fetch): McpServer {
         "Controllo formale e offline di una partita IVA italiana: lunghezza, cifra di controllo, codice ufficio. " +
         "Non dice se la partita IVA è attiva: per quello usa `verifica_partita_iva`.",
       inputSchema: { partita_iva: z.string().describe("Partita IVA, con o senza prefisso IT, spazi o punti") },
+      outputSchema: outValidaPartitaIva,
+      annotations: ANNOTAZIONI_OFFLINE,
     },
     async ({ partita_iva }) => json(validaPartitaIva(partita_iva)),
   );
@@ -96,6 +113,8 @@ export function creaServer(fetchImpl: typeof fetch = fetch): McpServer {
         "Restituisce anche denominazione e indirizzo quando disponibili. " +
         "Se la partita IVA non supera il controllo formale, VIES non viene interrogato.",
       inputSchema: { partita_iva: z.string().describe("Partita IVA italiana, 11 cifre") },
+      outputSchema: outVerificaPartitaIva,
+      annotations: ANNOTAZIONI_ONLINE,
     },
     async ({ partita_iva }) => {
       const formale = validaPartitaIva(partita_iva);
@@ -114,6 +133,8 @@ export function creaServer(fetchImpl: typeof fetch = fetch): McpServer {
         "gestisce l'omocodia ed estrae sesso, data di nascita (anno con secolo dedotto) e codice catastale del comune. " +
         "Per le persone giuridiche (11 cifre) applica il controllo della partita IVA.",
       inputSchema: { codice_fiscale: z.string().describe("Codice fiscale, 16 caratteri o 11 cifre") },
+      outputSchema: outValidaCodiceFiscale,
+      annotations: ANNOTAZIONI_OFFLINE,
     },
     async ({ codice_fiscale }) => json(validaCodiceFiscale(codice_fiscale)),
   );
@@ -126,6 +147,8 @@ export function creaServer(fetchImpl: typeof fetch = fetch): McpServer {
         "Validazione offline di un IBAN (mod 97, lunghezza per paese). Per gli IBAN italiani verifica anche il CIN " +
         "e scompone ABI, CAB e numero di conto. Non verifica l'esistenza del conto.",
       inputSchema: { iban: z.string().describe("IBAN, con o senza spazi") },
+      outputSchema: outValidaIban,
+      annotations: ANNOTAZIONI_OFFLINE,
     },
     async ({ iban }) => json(validaIban(iban)),
   );
@@ -144,6 +167,8 @@ export function creaServer(fetchImpl: typeof fetch = fetch): McpServer {
         partita_iva: z.string().describe("Partita IVA italiana, 11 cifre"),
         sanzioni: z.boolean().optional().describe("Esegui lo screening sanzioni sulla denominazione VIES (default true)"),
       },
+      outputSchema: outSchedaSoggetto,
+      annotations: ANNOTAZIONI_ONLINE,
     },
     async ({ partita_iva, sanzioni }) => {
       const formale = validaPartitaIva(partita_iva);
