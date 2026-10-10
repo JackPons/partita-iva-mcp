@@ -1,6 +1,6 @@
 {
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-07-09/server.schema.json",
-  "name": "io.github.TUO-UTENTE-GITHUB/partita-iva-mcp",
+  "name": "io.github.JackPons/partita-iva-mcp",
   "description": "Verifica partite IVA, codici fiscali e IBAN italiani; arricchimento da VIES e IPA. Gratuito, senza chiave.",
   "repository": {
     "url": "https://github.com/JackPons/partita-iva-mcp",

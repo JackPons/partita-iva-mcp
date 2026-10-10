@@ -1,6 +1,6 @@
 {
   "name": "partita-iva-mcp",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Server MCP per la verifica di partite IVA, codici fiscali e IBAN italiani, con arricchimento da fonti ufficiali gratuite (VIES, IPA, ISTAT, sanzioni UE).",
   "type": "module",
   "license": "MIT",
@@ -21,7 +21,9 @@
     "inspect": "npx @modelcontextprotocol/inspector tsx src/stdio.ts",
     "test": "node --import tsx --test test/*.test.ts",
     "typecheck": "tsc --noEmit",
-    "dati": "tsx scripts/aggiorna-dati.ts"
+    "dati": "tsx scripts/aggiorna-dati.ts",
+    "db:migra": "wrangler d1 migrations apply partita-iva-mcp-stats --remote",
+    "db:migra-locale": "wrangler d1 migrations apply partita-iva-mcp-stats --local"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.32.1",

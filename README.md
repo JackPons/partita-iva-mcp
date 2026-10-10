@@ -45,6 +45,34 @@ npm run deploy
 
 L'endpoint sarà `https://partita-iva-mcp.<tuo-subdominio>.workers.dev/mcp`. La home page (`/`) mostra le istruzioni di collegamento, `/health` risponde `{ok:true}`.
 
+## Statistiche d'uso e privacy
+
+Il worker conta le chiamate su **Cloudflare D1** e applica un **rate limit** di 60 richieste al minuto per utente. Entrambi sono opzionali: senza configurazione il server funziona uguale.
+
+**Cosa viene salvato** per ogni chiamata: data e ora, metodo MCP, nome dello strumento, client (es. `claude-ai`), paese, esito, durata, e un identificativo utente che è un hash di IP + giorno + sale segreto.
+
+**Cosa NON viene salvato**: gli argomenti degli strumenti (partite IVA, codici fiscali, IBAN, nomi) e gli indirizzi IP. L'hash cambia ogni giorno, quindi permette di contare gli utenti distinti in una giornata ma non di seguirli nel tempo. Le righe più vecchie di 90 giorni vengono cancellate ogni notte.
+
+### Configurazione (una volta)
+
+```bash
+npx wrangler d1 create partita-iva-mcp-stats     # copia il database_id in wrangler.jsonc
+npm run db:migra                                 # crea la tabella sul D1 remoto
+npx wrangler secret put STATS_TOKEN              # una stringa lunga a caso: protegge /stats
+npx wrangler secret put HASH_SALT                # un'altra stringa a caso: sale per l'hash degli IP
+npm run deploy
+```
+
+Per lo sviluppo locale: `npm run db:migra-locale` e un file `.dev.vars` (escluso da git) con `STATS_TOKEN=...` e `HASH_SALT=...`.
+
+### Leggere le statistiche
+
+```bash
+curl -H "Authorization: Bearer $STATS_TOKEN" https://<tuo-worker>/stats?giorni=30
+```
+
+oppure dal browser `https://<tuo-worker>/stats?token=...`. Restituisce totali, chiamate e utenti per giorno, chiamate ed errori per strumento, client e paesi.
+
 ## Pubblicazione nei registry
 
 1. Repo pubblico su GitHub.
@@ -78,8 +106,10 @@ src/
     sanzioni.ts   matching contro la lista UE
   data/           tabelle JSON (seed → aggiornate da npm run dati)
   server.ts       definizione degli strumenti MCP (condivisa)
+  telemetria.ts   conteggio chiamate (D1), rate limit, statistiche
   stdio.ts        entrypoint locale
   worker.ts       entrypoint Cloudflare Workers (Streamable HTTP, stateless)
+migrations/       schema SQL del database D1
 scripts/
   aggiorna-dati.ts  scarica e converte le tabelle ufficiali
 test/             node:test, con fetch finto per VIES e IPA
@@ -101,7 +131,8 @@ I dati restituiti sono soggetti alle licenze delle fonti originali.
 - [x] Comune da codice catastale, stato estero da codice Z
 - [x] Banca da ABI (tabella parziale)
 - [x] Screening sanzioni UE
-- [ ] Conteggio chiamate per strumento (KV) per capire cosa viene usato
+- [x] Conteggio chiamate per strumento (D1), senza dati personali
+- [x] Rate limit di base
 - [ ] API key opzionale con limiti più alti
 - [ ] CAP → comune (ISTAT/Poste)
 - [ ] ANAC (appalti aggiudicati) e RNA (aiuti di Stato) nella scheda soggetto
