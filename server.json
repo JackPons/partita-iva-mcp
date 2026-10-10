@@ -3,14 +3,14 @@
   "name": "io.github.TUO-UTENTE-GITHUB/partita-iva-mcp",
   "description": "Verifica partite IVA, codici fiscali e IBAN italiani; arricchimento da VIES e IPA. Gratuito, senza chiave.",
   "repository": {
-    "url": "https://github.com/TUO-UTENTE-GITHUB/partita-iva-mcp",
+    "url": "https://github.com/JackPons/partita-iva-mcp",
     "source": "github"
   },
   "version": "0.2.0",
   "remotes": [
     {
       "type": "streamable-http",
-      "url": "https://partita-iva-mcp.TUO-SUBDOMINIO.workers.dev/mcp"
+      "url": "https://partita-iva-mcp.pons-labs.workers.dev"
     }
   ]
 }
