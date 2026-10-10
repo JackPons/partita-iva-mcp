@@ -31,7 +31,7 @@ test("partita IVA: codice ufficio 999 segnala non residente", () => {
 });
 
 test("codice fiscale: esempio noto e omocodia", () => {
-  // Esempio didattico ricorrente: RSSMRA85T10A562S (Mario Rossi, 10/12/1985, Atri)
+  // Esempio didattico ricorrente: RSSMRA85T10A562S (Mario Rossi, 10/12/1985, A562 = San Giuliano Terme)
   const r = validaCodiceFiscale("rssmra85t10a562s");
   assert.equal(r.valido, true);
   assert.equal(r.tipo, "persona_fisica");

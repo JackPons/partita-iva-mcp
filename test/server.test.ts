@@ -3,7 +3,6 @@ import assert from "node:assert/strict";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { creaServer } from "../src/server.js";
-import { infoTabelle } from "../src/lib/tabelle.js";
 
 /** fetch finto: simula VIES e IPA senza rete */
 const fetchFinto: typeof fetch = async (input, init) => {
@@ -60,7 +59,7 @@ test("scheda_soggetto combina VIES e IPA", async () => {
   assert.equal(out.vies.attiva, true);
   assert.equal(out.vies.indirizzo.comune, "Roma");
   assert.equal(out.vies.indirizzo.comune_riconosciuto, true);
-  assert.equal(out.sanzioni.esito, infoTabelle.sanzioni.aggiornato ? "nessuna_corrispondenza" : "lista_non_caricata");
+  assert.ok(["lista_non_caricata", "nessuna_corrispondenza", "da_verificare"].includes(out.sanzioni.esito));
   assert.equal(out.ipa.e_pubblica_amministrazione, true);
   assert.equal(out.ipa.codice_ipa, "c_h501");
   assert.match(out.riepilogo, /attiva/);

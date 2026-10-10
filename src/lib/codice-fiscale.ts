@@ -25,7 +25,7 @@ export interface CodiceFiscaleCheck {
     anno_ambiguo: boolean;
     codice_catastale: string;
     nato_estero: boolean;
-    luogo_nascita?: string; // "Atri (TE)" oppure il nome dello stato estero
+    luogo_nascita?: string; // "Roma (RM)" oppure il nome dello stato estero
     provincia_nascita?: string;
     omocodia: boolean;
   };

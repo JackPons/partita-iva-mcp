@@ -44,7 +44,9 @@ export function somiglianza(a: string[], b: string[]): number {
   let comuni = 0;
   for (const t of sa) if (sb.has(t)) comuni++;
   const dice = (2 * comuni) / (sa.size + sb.size);
-  const contenuto = comuni === Math.min(sa.size, sb.size);
+  // bonus di contenimento solo con almeno 2 token in comune:
+  // un singolo token generico ("BANK") non basta a segnalare un match
+  const contenuto = comuni >= 2 && comuni === Math.min(sa.size, sb.size);
   return contenuto ? Math.max(dice, 0.85) : dice;
 }
 

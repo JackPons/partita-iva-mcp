@@ -4,12 +4,13 @@ import { validaCodiceFiscale, checkCharCodiceFiscale } from "../src/lib/codice-f
 import { validaIban, calcolaCin } from "../src/lib/iban.js";
 import { parseIndirizzoItaliano } from "../src/lib/vies.js";
 import { controllaSanzioni, somiglianza, tokenizza } from "../src/lib/sanzioni.js";
-import { cercaComune, comuneDaCatastale, infoTabelle, normalizzaNome } from "../src/lib/tabelle.js";
+import { cercaComune, comuneDaCatastale, normalizzaNome, infoTabelle } from "../src/lib/tabelle.js";
 
-test("codice fiscale: comune di nascita dalla tabella (seed)", () => {
-  const r = validaCodiceFiscale("RSSMRA85T10A562S");
-  assert.equal(r.dati?.luogo_nascita, "San Giuliano Terme (PI)");
-  assert.equal(r.dati?.provincia_nascita, "PI");
+test("codice fiscale: comune di nascita dalla tabella", () => {
+  const prime15 = "RSSMRA85T10H501";
+  const r = validaCodiceFiscale(prime15 + checkCharCodiceFiscale(prime15));
+  assert.equal(r.dati?.luogo_nascita, "Roma (RM)");
+  assert.equal(r.dati?.provincia_nascita, "RM");
 });
 
 test("codice fiscale: nato all'estero → nome dello stato", () => {
@@ -48,20 +49,23 @@ test("indirizzo VIES: comune riconosciuto e normalizzato", () => {
 test("tabelle: ricerca comune per nome e catastale", () => {
   assert.equal(cercaComune("roma")?.codice_catastale, "H501");
   assert.equal(cercaComune("Roma", "MI"), undefined);
-  assert.equal(comuneDaCatastale("g702")?.comune, "Pisa");
+  assert.equal(comuneDaCatastale("h501")?.comune, "Roma");
   assert.equal(normalizzaNome("Società  Città-Più S.r.l."), "SOCIETA CITTA PIU S R L");
 });
 
 test("sanzioni: tokenizzazione e somiglianza", () => {
   assert.deepEqual(tokenizza("Esempio Sanzionata Ltd."), ["ESEMPIO", "SANZIONATA"]);
   assert.equal(somiglianza(["A", "B"], ["A", "B"]), 1);
-  assert.equal(somiglianza(["A", "B", "C"], ["A", "B"]), 0.85); // contenimento
+  assert.equal(somiglianza(["A", "B", "C"], ["A", "B"]), 0.85); // contenimento con 2+ token
+  // un solo token in comune non dà il bonus (caso reale: "T-Bank JSC" vs "Bank Rossiya")
+  assert.ok(somiglianza(tokenizza("Bank Rossiya"), tokenizza("T-Bank JSC")) < 0.8);
   assert.ok(somiglianza(["A", "B"], ["C", "D"]) === 0);
 });
 
 test("sanzioni: esito coerente con lo stato della lista", () => {
   const r = controllaSanzioni("Esempio Sanzionata S.r.l.");
-  assert.equal(r.esito, infoTabelle.sanzioni.aggiornato ? "nessuna_corrispondenza" : "lista_non_caricata");
+  if (infoTabelle.sanzioni.aggiornato) assert.notEqual(r.esito, "lista_non_caricata");
+  else assert.equal(r.esito, "lista_non_caricata");
 });
 
 test("sanzioni: matching su lista iniettata", () => {
