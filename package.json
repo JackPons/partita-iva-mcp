@@ -1,6 +1,6 @@
 {
   "name": "partita-iva-mcp",
-  "version": "0.3.1",
+  "version": "0.3.2",
   "description": "Server MCP per la verifica di partite IVA, codici fiscali e IBAN italiani, con arricchimento da fonti ufficiali gratuite (VIES, IPA, ISTAT, sanzioni UE).",
   "type": "module",
   "license": "MIT",

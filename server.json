@@ -1,16 +1,17 @@
 {
-  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-07-09/server.schema.json",
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "io.github.JackPons/partita-iva-mcp",
-  "description": "Verifica partite IVA, codici fiscali e IBAN italiani; arricchimento da VIES e IPA. Gratuito, senza chiave.",
+  "title": "Verika - Verifica P.IVA, Codice Fiscale e IBAN",
+  "description": "Verifica partita IVA, codice fiscale e IBAN italiani con dati ufficiali (VIES, IPA, ISTAT)",
   "repository": {
     "url": "https://github.com/JackPons/partita-iva-mcp",
     "source": "github"
   },
-  "version": "0.2.0",
+  "version": "0.3.2",
   "remotes": [
     {
       "type": "streamable-http",
-      "url": "https://partita-iva-mcp.pons-labs.workers.dev"
+      "url": "https://partita-iva-mcp.pons-labs.workers.dev/mcp"
     }
   ]
 }
