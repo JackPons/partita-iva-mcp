@@ -21,7 +21,7 @@ import {
 
 export const SERVER_INFO = {
   name: "partita-iva-mcp",
-  version: "0.4.0",
+  version: "0.4.2",
 };
 
 function json(payload: unknown) {

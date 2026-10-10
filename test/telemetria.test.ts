@@ -186,3 +186,60 @@ test("worker: /stats senza token → 401, con token → JSON", async () => {
   const chiuso = await worker.fetch(new Request("https://x/stats?token="), { DB: db }, ctx);
   assert.equal(chiuso.status, 401);
 });
+
+test("worker: /privacy usa titolare ed email dalla config, senza HTML iniettabile", async () => {
+  const { ctx } = ctxFinto();
+  const res = await worker.fetch(
+    new Request("https://x.workers.dev/privacy"),
+    { PRIVACY_TITOLARE: "Mario <b>Rossi</b>", PRIVACY_EMAIL: "privacy@esempio.it" },
+    ctx,
+  );
+  assert.equal(res.status, 200);
+  const html = await res.text();
+  assert.match(html, /mailto:privacy@esempio\.it/);
+  assert.match(html, /Mario &lt;b&gt;Rossi&lt;\/b&gt;/);
+  assert.match(html, /non vengono salvati/);
+  const senza = await (await worker.fetch(new Request("https://x/privacy"), {}, ctx)).text();
+  assert.match(senza, /da configurare/);
+});
+
+test("esito: versione di protocollo non supportata è negoziazione, non errore", () => {
+  assert.equal(
+    esitoDaRisposta(400, { error: { code: -32000, message: "Bad Request: Unsupported protocol version: 2026-07-28" } }),
+    "non_supportato",
+  );
+  assert.equal(esitoDaRisposta(400, { error: { code: -32000, message: "Bad Request: altro" } }), "errore");
+});
+
+test("worker: tools/list da client con Accept generico (curl, bot) viene servito", async () => {
+  const { db, righe } = dbFinto();
+  const { ctx, finito } = ctxFinto();
+  const res = await worker.fetch(
+    new Request("https://x/mcp", {
+      method: "POST",
+      headers: { "content-type": "application/json", accept: "*/*", "user-agent": "curl/7.81.0" },
+      body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/list" }),
+    }),
+    { DB: db },
+    ctx,
+  );
+  assert.equal(res.status, 200);
+  const body = (await res.json()) as any;
+  assert.equal(body.result.tools.length, 7);
+  await finito();
+  assert.equal((righe[0] as string[])[7], "ok");
+});
+
+test("worker: senza header Accept del tutto viene servito", async () => {
+  const { ctx } = ctxFinto();
+  const res = await worker.fetch(
+    new Request("https://x/mcp", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/list" }),
+    }),
+    {},
+    ctx,
+  );
+  assert.equal(res.status, 200);
+});

@@ -5,6 +5,10 @@
   "compatibility_date": "2026-10-01",
   "compatibility_flags": ["nodejs_compat"],
   "observability": { "enabled": true },
+  "vars": {
+     "PRIVACY_TITOLARE": "Jacopo Ruozzi",
+     "PRIVACY_EMAIL": "jacopo.ruozzi@verika.it"
+   },
 
   // Conteggio chiamate.
   "d1_databases": [

@@ -10,6 +10,7 @@
  */
 import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js";
 import { creaServer, SERVER_INFO } from "./server.js";
+import { paginaPrivacy } from "./privacy.js";
 import {
   contestoDaRichiesta,
   controllaLimite,
@@ -33,6 +34,10 @@ export interface Env {
   STATS_TOKEN?: string;
   /** Sale per l'hash degli IP: `npx wrangler secret put HASH_SALT`. */
   HASH_SALT?: string;
+  /** Titolare del trattamento mostrato su /privacy (wrangler.jsonc → vars). */
+  PRIVACY_TITOLARE?: string;
+  /** Email di contatto mostrata su /privacy e in home (wrangler.jsonc → vars). */
+  PRIVACY_EMAIL?: string;
 }
 
 interface Ctx {
@@ -58,11 +63,14 @@ function paginaIniziale(origin: string): Response {
 <pre>{ "mcpServers": { "partita-iva": { "url": "${origin}/mcp" } } }</pre>
 <h2>Strumenti</h2>
 <ul>
-<li><code>valida_partita_iva</code>, <code>valida_codice_fiscale</code>, <code>valida_iban</code>: validazione offline</li>
+<li><code>scheda_soggetto</code>: quadro completo da partita IVA (VIES, sede su ISTAT, IPA, screening sanzioni UE)</li>
 <li><code>verifica_partita_iva</code>: stato su VIES</li>
-<li><code>scheda_soggetto</code>: quadro completo (VIES + IPA)</li>
+<li><code>valida_partita_iva</code>, <code>valida_codice_fiscale</code>, <code>valida_iban</code>: validazione offline</li>
+<li><code>cerca_comune</code>: comuni ISTAT per nome o codice catastale</li>
+<li><code>controlla_sanzioni</code>: screening indicativo sulla lista sanzioni UE</li>
 </ul>
-<p>Fonti: VIES (Commissione Europea), IPA (indicepa.gov.it). I dati restituiti sono soggetti alle licenze delle fonti originali.</p>`;
+<p>Fonti: VIES (Commissione Europea), IPA (indicepa.gov.it), ISTAT, lista consolidata sanzioni UE. I dati restituiti sono soggetti alle licenze delle fonti originali.</p>
+<p><a href="/privacy">Informativa privacy</a> · <a href="https://github.com/JackPons/partita-iva-mcp">Codice e documentazione</a></p>`;
   return new Response(html, { headers: { "content-type": "text/html; charset=utf-8" } });
 }
 
@@ -71,6 +79,14 @@ function jsonRpcErrore(status: number, codice: number, messaggio: string): Respo
     status,
     headers: { "content-type": "application/json", ...CORS },
   });
+}
+
+export function conAcceptCompleto(request: Request): Request {
+  const accept = (request.headers.get("accept") ?? "").toLowerCase();
+  if (accept.includes("application/json") && accept.includes("text/event-stream")) return request;
+  const headers = new Headers(request.headers);
+  headers.set("accept", "application/json, text/event-stream");
+  return new Request(request, { headers });
 }
 
 async function gestisciMcp(request: Request, env: Env, ctx: Ctx): Promise<Response> {
@@ -90,6 +106,11 @@ async function gestisciMcp(request: Request, env: Env, ctx: Ctx): Promise<Respon
     ctx.waitUntil(registra(env.DB, contesto, eventi, "limitato", Date.now() - inizio));
     return jsonRpcErrore(429, -32000, "Troppe richieste: riprova tra un minuto.");
   }
+
+  // Alcuni client semplici (curl, script, bot dei cataloghi) non dichiarano di
+  // accettare text/event-stream e l'SDK li rifiuta con 406, anche se questo
+  // server risponde sempre in JSON. Completiamo l'header per loro.
+  if (request.method === "POST") request = conAcceptCompleto(request);
 
   const server = creaServer();
   const transport = new WebStandardStreamableHTTPServerTransport({
@@ -136,6 +157,14 @@ export default {
     }
     if (url.pathname === "/" || url.pathname === "") {
       return paginaIniziale(url.origin);
+    }
+    if (url.pathname === "/privacy") {
+      return paginaPrivacy({
+        titolare: env.PRIVACY_TITOLARE,
+        email: env.PRIVACY_EMAIL,
+        nomeServizio: "Verika · Partita IVA MCP",
+        origin: url.origin,
+      });
     }
     if (url.pathname === "/health") {
       return Response.json({ ok: true, ...SERVER_INFO });

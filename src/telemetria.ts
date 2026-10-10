@@ -81,10 +81,13 @@ export function esitoDaRisposta(status: number, body: unknown): Exclude<Esito, "
   let nonSupportato = false;
   for (const m of messaggi) {
     if (!m || typeof m !== "object") continue;
-    const r = m as { error?: { code?: unknown }; result?: { isError?: unknown } };
+    const r = m as { error?: { code?: unknown; message?: unknown }; result?: { isError?: unknown } };
     if (r.result?.isError === true) return "errore";
     if (r.error) {
-      if (r.error.code === -32601) {
+      // -32601: metodo di una versione più nuova del protocollo (es. server/discover).
+      // "Unsupported protocol version": negoziazione, il client ripiega su una versione precedente.
+      const versione = typeof r.error.message === "string" && /unsupported protocol version/i.test(r.error.message);
+      if (r.error.code === -32601 || versione) {
         nonSupportato = true;
         continue;
       }
