@@ -192,7 +192,6 @@ I dati restituiti sono soggetti alle licenze delle fonti originali.
 - [ ] CAP → comune (ISTAT/Poste)
 - [ ] ANAC (appalti aggiudicati) e RNA (aiuti di Stato) nella scheda soggetto
 - [ ] Descrizione codice ATECO
-- [ ] Registro Imprese via rivenditore (soci, cariche, bilanci, protesti) — a pagamento
 
 ## Licenza
 
