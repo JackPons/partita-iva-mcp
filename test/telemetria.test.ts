@@ -59,6 +59,11 @@ test("estraiEventi: tools/call, initialize, batch, notifiche ignorate", () => {
     { metodo: "initialize", client: "claude-ai 0.1" },
   ]);
   assert.equal(estraiEventi([{ method: "tools/list" }, { method: "notifications/initialized" }]).length, 1);
+  // protocollo stateless: clientInfo in _meta
+  assert.deepEqual(
+    estraiEventi({ method: "tools/call", params: { name: "valida_iban", _meta: { "io.modelcontextprotocol/clientInfo": { name: "claude-ai", version: "2" } } } }),
+    [{ metodo: "tools/call", strumento: "valida_iban", client: "claude-ai 2" }],
+  );
   assert.deepEqual(estraiEventi("non json"), []);
 });
 
@@ -70,8 +75,11 @@ test("gli argomenti degli strumenti non finiscono mai negli eventi", () => {
 test("esitoDaRisposta", () => {
   assert.equal(esitoDaRisposta(200, { result: { content: [] } }), "ok");
   assert.equal(esitoDaRisposta(200, { result: { isError: true } }), "errore");
-  assert.equal(esitoDaRisposta(200, { error: { code: -32601 } }), "errore");
+  assert.equal(esitoDaRisposta(200, { error: { code: -32602 } }), "errore");
   assert.equal(esitoDaRisposta(500, {}), "errore");
+  // method not found (es. server/discover) non è un errore
+  assert.equal(esitoDaRisposta(200, { error: { code: -32601 } }), "non_supportato");
+  assert.equal(esitoDaRisposta(404, { error: { code: -32601 } }), "non_supportato");
 });
 
 test("hash utente: stabile nel giorno, diverso il giorno dopo, nessun IP in chiaro", async () => {
@@ -142,6 +150,15 @@ test("worker: oltre il limite risponde 429 e registra 'limitato'", async () => {
   assert.equal(res.status, 429);
   await finito();
   assert.equal((righe[0] as string[])[7], "limitato");
+});
+
+test("worker: server/discover viene registrato come non_supportato (caso reale da Claude)", async () => {
+  const { db, righe } = dbFinto();
+  const { ctx, finito } = ctxFinto();
+  await worker.fetch(richiestaMcp({ jsonrpc: "2.0", id: 1, method: "server/discover", params: {} }), { DB: db }, ctx);
+  await finito();
+  assert.equal((righe[0] as string[])[2], "server/discover");
+  assert.equal((righe[0] as string[])[7], "non_supportato");
 });
 
 test("worker: funziona anche senza D1 né limiter", async () => {

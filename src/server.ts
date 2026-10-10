@@ -10,7 +10,7 @@ import { cercaComune, comuneDaCatastale, infoTabelle } from "./lib/tabelle.js";
 
 export const SERVER_INFO = {
   name: "partita-iva-mcp",
-  version: "0.3.0",
+  version: "0.3.1",
 };
 
 function json(payload: unknown) {

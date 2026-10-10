@@ -20,6 +20,7 @@ import {
   statistiche,
   tokenValido,
   type DbMinimo,
+  type Esito,
   type RateLimiterMinimo,
 } from "./telemetria.js";
 
@@ -100,7 +101,7 @@ async function gestisciMcp(request: Request, env: Env, ctx: Ctx): Promise<Respon
 
   // leggiamo il body una volta: serve sia per l'esito sia per rispondere
   const testo = response.body ? await response.text() : "";
-  let esito: "ok" | "errore" = response.status >= 400 ? "errore" : "ok";
+  let esito: Esito = response.status >= 400 ? "errore" : "ok";
   if (testo) {
     try {
       esito = esitoDaRisposta(response.status, JSON.parse(testo));

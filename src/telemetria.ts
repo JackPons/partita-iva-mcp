@@ -22,6 +22,8 @@ export interface RateLimiterMinimo {
   limit(opzioni: { key: string }): Promise<{ success: boolean }>;
 }
 
+export type Esito = "ok" | "errore" | "non_supportato" | "limitato";
+
 export interface Evento {
   metodo: string;
   strumento?: string;
@@ -45,33 +47,52 @@ export function estraiEventi(body: unknown): Evento[] {
   const eventi: Evento[] = [];
   for (const m of messaggi) {
     if (!m || typeof m !== "object") continue;
-    const msg = m as { method?: unknown; params?: { name?: unknown; clientInfo?: { name?: unknown; version?: unknown } } };
+    type InfoClient = { name?: unknown; version?: unknown };
+    const msg = m as {
+      method?: unknown;
+      params?: { name?: unknown; clientInfo?: InfoClient; _meta?: Record<string, unknown> };
+    };
     if (typeof msg.method !== "string") continue;
     if (msg.method.startsWith("notifications/")) continue;
     const ev: Evento = { metodo: msg.method };
     if (msg.method === "tools/call" && typeof msg.params?.name === "string") {
       ev.strumento = msg.params.name.slice(0, 64);
     }
-    if (msg.method === "initialize" && typeof msg.params?.clientInfo?.name === "string") {
-      const v = typeof msg.params.clientInfo.version === "string" ? ` ${msg.params.clientInfo.version}` : "";
-      ev.client = (msg.params.clientInfo.name + v).slice(0, 80);
+    // clientInfo arriva in initialize (protocollo classico) o in _meta (protocollo stateless 2026-07-28)
+    const info = (msg.method === "initialize" ? msg.params?.clientInfo : undefined) ??
+      (msg.params?._meta?.["io.modelcontextprotocol/clientInfo"] as InfoClient | undefined);
+    if (info && typeof info.name === "string") {
+      const v = typeof info.version === "string" ? ` ${info.version}` : "";
+      ev.client = (info.name + v).slice(0, 80);
     }
     eventi.push(ev);
   }
   return eventi;
 }
 
-/** Determina l'esito leggendo la risposta JSON-RPC (o lo status HTTP). */
-export function esitoDaRisposta(status: number, body: unknown): "ok" | "errore" {
-  if (status >= 400) return "errore";
+/**
+ * Determina l'esito leggendo la risposta JSON-RPC (o lo status HTTP).
+ * "Method not found" (-32601) è "non_supportato", non un errore: capita quando
+ * un client prova un metodo di una versione del protocollo più nuova
+ * (es. server/discover) e poi ripiega su quella che il server supporta.
+ */
+export function esitoDaRisposta(status: number, body: unknown): Exclude<Esito, "limitato"> {
   const messaggi = Array.isArray(body) ? body : [body];
+  let nonSupportato = false;
   for (const m of messaggi) {
-    if (m && typeof m === "object") {
-      const r = m as { error?: unknown; result?: { isError?: unknown } };
-      if (r.error || r.result?.isError === true) return "errore";
+    if (!m || typeof m !== "object") continue;
+    const r = m as { error?: { code?: unknown }; result?: { isError?: unknown } };
+    if (r.result?.isError === true) return "errore";
+    if (r.error) {
+      if (r.error.code === -32601) {
+        nonSupportato = true;
+        continue;
+      }
+      return "errore";
     }
   }
-  return "ok";
+  if (nonSupportato) return "non_supportato";
+  return status >= 400 ? "errore" : "ok";
 }
 
 export async function hashUtente(ip: string, giorno: string, sale: string): Promise<string> {
@@ -93,7 +114,7 @@ export async function registra(
   db: DbMinimo | undefined,
   ctx: Contesto,
   eventi: Evento[],
-  esito: "ok" | "errore" | "limitato",
+  esito: Esito,
   durataMs: number,
 ): Promise<void> {
   if (!db || eventi.length === 0) return;
@@ -128,10 +149,11 @@ export async function statistiche(db: DbMinimo, giorni = 30) {
   const dal = new Date(Date.now() - giorni * 86_400_000).toISOString().slice(0, 10);
   const q = async <T>(sql: string) => (await db.prepare(sql).bind(dal).all<T>()).results;
   const [totali, perGiorno, perStrumento, perClient, perPaese] = await Promise.all([
-    q<{ chiamate: number; chiamate_strumenti: number; errori: number; limitati: number }>(
+    q<{ chiamate: number; chiamate_strumenti: number; errori: number; non_supportati: number; limitati: number }>(
       `SELECT COUNT(*) AS chiamate,
               SUM(metodo = 'tools/call') AS chiamate_strumenti,
               SUM(esito = 'errore') AS errori,
+              SUM(esito = 'non_supportato') AS non_supportati,
               SUM(esito = 'limitato') AS limitati
        FROM chiamate WHERE giorno >= ?`,
     ),
@@ -143,16 +165,28 @@ export async function statistiche(db: DbMinimo, giorni = 30) {
       `SELECT strumento, COUNT(*) AS chiamate, SUM(esito = 'errore') AS errori, CAST(AVG(durata_ms) AS INTEGER) AS durata_media_ms
        FROM chiamate WHERE giorno >= ? AND metodo = 'tools/call' GROUP BY strumento ORDER BY chiamate DESC`,
     ),
-    q<{ client: string; sessioni: number }>(
-      `SELECT client, COUNT(*) AS sessioni
-       FROM chiamate WHERE giorno >= ? AND metodo = 'initialize' GROUP BY client ORDER BY sessioni DESC LIMIT 20`,
+    q<{ client: string; chiamate: number; chiamate_strumenti: number }>(
+      `SELECT client, COUNT(*) AS chiamate, SUM(metodo = 'tools/call') AS chiamate_strumenti
+       FROM chiamate WHERE giorno >= ? GROUP BY client ORDER BY chiamate DESC LIMIT 20`,
     ),
     q<{ paese: string; chiamate: number }>(
       `SELECT paese, COUNT(*) AS chiamate
        FROM chiamate WHERE giorno >= ? GROUP BY paese ORDER BY chiamate DESC LIMIT 20`,
     ),
   ]);
-  return { periodo_giorni: giorni, dal, totali: totali[0], per_giorno: perGiorno, per_strumento: perStrumento, per_client: perClient, per_paese: perPaese };
+  return {
+    periodo_giorni: giorni,
+    dal,
+    note: [
+      "non_supportati: metodi di versioni più nuove del protocollo (es. server/discover) a cui il client rinuncia ripiegando; non sono guasti.",
+      "utenti e paese: per i connettori usati da claude.ai/Claude Desktop le richieste partono dai server di Anthropic, quindi non rappresentano le persone. Sono significativi per i client che si collegano direttamente (Claude Code, Cursor, script).",
+    ],
+    totali: totali[0],
+    per_giorno: perGiorno,
+    per_strumento: perStrumento,
+    per_client: perClient,
+    per_paese: perPaese,
+  };
 }
 
 export async function pulisciVecchie(db: DbMinimo, giorniConservati = 90): Promise<void> {
