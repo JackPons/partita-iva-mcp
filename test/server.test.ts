@@ -9,7 +9,7 @@ const fetchFinto: typeof fetch = async (input, init) => {
   const url = String(input);
   if (url.includes("vies")) {
     const body = JSON.parse(String(init?.body));
-    const attiva = body.vatNumber === "00000000000";
+    const attiva = body.vatNumber === "00159560366";
     return Response.json({
       countryCode: "IT",
       vatNumber: body.vatNumber,
@@ -24,7 +24,7 @@ const fetchFinto: typeof fetch = async (input, init) => {
   }
   if (url.includes("datastore_search")) {
     const filtri = JSON.parse(decodeURIComponent(url.split("filters=")[1].split("&")[0]));
-    const pa = filtri.Codice_fiscale_ente === "00000000000";
+    const pa = filtri.Codice_fiscale_ente === "00159560366";
     return Response.json({
       success: true,
       result: { records: pa ? [{ Codice_IPA: "c_h501", Denominazione_ente: "COMUNE DI ESEMPIO", Mail1: "pec@esempio.it", Comune: "ROMA", Provincia: "RM" }] : [] },
@@ -53,7 +53,7 @@ test("il server espone i sette strumenti", async () => {
 
 test("scheda_soggetto combina VIES e IPA", async () => {
   const client = await clientCollegato();
-  const res = await client.callTool({ name: "scheda_soggetto", arguments: { partita_iva: "00000000000" } });
+  const res = await client.callTool({ name: "scheda_soggetto", arguments: { partita_iva: "00159560366" } });
   const out = res.structuredContent as any;
   assert.equal(out.formale.valida, true);
   assert.equal(out.vies.attiva, true);

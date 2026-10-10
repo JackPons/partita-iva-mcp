@@ -14,7 +14,6 @@ export interface DbMinimo {
     all<T = unknown>(): Promise<{ results: T[] }>;
     run(): Promise<unknown>;
   };
-  batch?(istruzioni: unknown[]): Promise<unknown>;
 }
 
 /** Binding di rate limiting di Cloudflare (opzionale). */
@@ -34,7 +33,8 @@ export interface Contesto {
   ts: string;
   giorno: string;
   paese?: string;
-  utente: string;
+  /** null = non registrare l'utente (vedi worker: HASH_SALT assente). */
+  utente: string | null;
   userAgent?: string;
 }
 

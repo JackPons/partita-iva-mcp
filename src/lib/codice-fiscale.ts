@@ -12,24 +12,7 @@
 
 import { validaPartitaIva } from "./partita-iva.js";
 import { comuneDaCatastale, statoDaCodice } from "./tabelle.js";
-
-export interface CodiceFiscaleCheck {
-  input: string;
-  normalizzato: string;
-  valido: boolean;
-  tipo?: "persona_fisica" | "persona_giuridica";
-  errore?: string;
-  dati?: {
-    sesso: "M" | "F";
-    data_nascita: string; // YYYY-MM-DD, l'anno è dedotto (secolo ambiguo)
-    anno_ambiguo: boolean;
-    codice_catastale: string;
-    nato_estero: boolean;
-    luogo_nascita?: string; // "Roma (RM)" oppure il nome dello stato estero
-    provincia_nascita?: string;
-    omocodia: boolean;
-  };
-}
+import type { CodiceFiscaleCheck } from "../schemi.js";
 
 const MESI = "ABCDEHLMPRST";
 const OMOCODIA = "LMNPQRSTUV";
@@ -44,10 +27,14 @@ function pari(c: string): number {
   return /\d/.test(c) ? Number(c) : c.charCodeAt(0) - 65;
 }
 
-export function checkCharCodiceFiscale(prime15: string): string {
+/**
+ * Carattere di controllo a pesi pari/dispari mod 26. Lo stesso algoritmo
+ * calcola il CIN degli IBAN italiani (su ABI + CAB + conto).
+ */
+export function checkCharCodiceFiscale(caratteri: string): string {
   let somma = 0;
-  for (let i = 0; i < 15; i++) {
-    const c = prime15[i];
+  for (let i = 0; i < caratteri.length; i++) {
+    const c = caratteri[i];
     somma += i % 2 === 0 ? DISPARI[c] : pari(c);
   }
   return String.fromCharCode(65 + (somma % 26));
@@ -105,11 +92,14 @@ export function validaCodiceFiscale(raw: string): CodiceFiscaleCheck {
   let giorno = Number(cf.slice(9, 11));
   const sesso: "M" | "F" = giorno > 40 ? "F" : "M";
   if (sesso === "F") giorno -= 40;
-  if (giorno < 1 || giorno > 31) return { ...base, errore: "Giorno di nascita non valido." };
 
   const aa = Number(cf.slice(6, 8));
   const annoCorrente = new Date().getFullYear();
   const anno = 2000 + aa <= annoCorrente ? 2000 + aa : 1900 + aa;
+  // la data deve esistere davvero (niente 31 febbraio); Date "sposta" i giorni fuori mese
+  if (giorno < 1 || new Date(Date.UTC(anno, mese, giorno)).getUTCDate() !== giorno) {
+    return { ...base, errore: "Giorno di nascita non valido." };
+  }
 
   const codiceCatastale = cf.slice(11, 15);
   const natoEstero = codiceCatastale.startsWith("Z");

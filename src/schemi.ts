@@ -9,6 +9,9 @@
  *
  * Gli oggetti sono "loose": campi aggiuntivi sono ammessi, così aggiungere
  * un'informazione non rompe i client esistenti.
+ *
+ * I tipi TypeScript dei risultati in src/lib derivano da qui (z.infer):
+ * lo schema è l'unica definizione della forma.
  */
 import { z } from "zod";
 
@@ -64,7 +67,7 @@ export const ipa = z.looseObject({
   errore: opt(s),
 });
 
-const soggettoCollegato = z.looseObject({ lei: s, denominazione: opt(s), paese: opt(s) });
+export const soggettoCollegato = z.looseObject({ lei: s, denominazione: opt(s), paese: opt(s) });
 
 export const gleif = z.looseObject({
   fonte: z.literal("GLEIF"),
@@ -111,7 +114,7 @@ export const outVerificaPartitaIva = {
   vies: vies.nullable().describe("null se la partita IVA non supera il controllo formale"),
 };
 
-export const outValidaCodiceFiscale = {
+export const codiceFiscale = z.looseObject({
   input: s,
   normalizzato: s,
   valido: z.boolean(),
@@ -129,9 +132,10 @@ export const outValidaCodiceFiscale = {
       omocodia: z.boolean(),
     }),
   ),
-};
+});
+export const outValidaCodiceFiscale = codiceFiscale.shape;
 
-export const outValidaIban = {
+export const iban = z.looseObject({
   input: s,
   normalizzato: s,
   valido: z.boolean(),
@@ -148,7 +152,8 @@ export const outValidaIban = {
     }),
   ),
   formattato: opt(s),
-};
+});
+export const outValidaIban = iban.shape;
 
 export const outCercaComune = {
   trovato: z.boolean(),
@@ -158,6 +163,7 @@ export const outCercaComune = {
   codice_catastale: opt(s),
   codice_istat: opt(s),
   tabella: opt(z.looseObject({ fonte: s, voci: z.number() })),
+  omonimi: opt(z.array(z.looseObject({ provincia: s, codice_catastale: s }))).describe("Comuni con lo stesso nome, se la provincia non basta a sceglierne uno"),
   errore: opt(s),
 };
 
@@ -183,9 +189,27 @@ export const ANNOTAZIONI_OFFLINE = {
 } as const;
 
 /** Strumenti che interrogano servizi esterni (VIES, IPA). */
-export const ANNOTAZIONI_ONLINE = {
-  readOnlyHint: true,
-  destructiveHint: false,
-  idempotentHint: true,
-  openWorldHint: true,
-} as const;
+export const ANNOTAZIONI_ONLINE = { ...ANNOTAZIONI_OFFLINE, openWorldHint: true } as const;
+
+// ---- tipi derivati ----------------------------------------------------------
+
+/**
+ * Toglie l'indice `[k: string]: unknown` che z.infer aggiunge agli oggetti
+ * loose: così nel codice TypeScript segnala ancora i campi scritti male.
+ */
+type Stretto<T> = T extends readonly (infer U)[]
+  ? Stretto<U>[]
+  : T extends object
+    ? { [K in keyof T as string extends K ? never : K]: Stretto<T[K]> }
+    : T;
+
+export type PartitaIvaCheck = Stretto<z.infer<typeof formalePartitaIva>>;
+export type IndirizzoParsato = Stretto<z.infer<typeof indirizzo>>;
+export type ViesResult = Stretto<z.infer<typeof vies>>;
+export type IpaResult = Stretto<z.infer<typeof ipa>>;
+export type SoggettoCollegato = Stretto<z.infer<typeof soggettoCollegato>>;
+export type GleifResult = Stretto<z.infer<typeof gleif>>;
+export type EsitoSanzioni = Stretto<z.infer<typeof esitoSanzioni>>;
+export type MatchSanzione = EsitoSanzioni["possibili_corrispondenze"][number];
+export type CodiceFiscaleCheck = Stretto<z.infer<typeof codiceFiscale>>;
+export type IbanCheck = Stretto<z.infer<typeof iban>>;

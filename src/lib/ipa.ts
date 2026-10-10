@@ -9,19 +9,7 @@
  * Portale: https://indicepa.gov.it/ipa-dati/
  */
 
-export interface IpaResult {
-  fonte: "IPA";
-  e_pubblica_amministrazione: boolean;
-  codice_ipa?: string;
-  denominazione?: string;
-  tipologia?: string;
-  pec?: string;
-  sito_web?: string;
-  comune?: string;
-  provincia?: string;
-  servizio_disponibile: boolean;
-  errore?: string;
-}
+import type { IpaResult } from "../schemi.js";
 
 const CKAN_BASE = "https://indicepa.gov.it/ipa-dati/api/3/action";
 const PACKAGE_ENTI = "enti";
@@ -52,8 +40,14 @@ export async function cercaInIpa(codiceFiscale: string, fetchImpl: typeof fetch 
     const resourceId = await scopriResourceId(fetchImpl);
     const filtri = encodeURIComponent(JSON.stringify({ Codice_fiscale_ente: codiceFiscale }));
     const res = await fetchImpl(`${CKAN_BASE}/datastore_search?resource_id=${resourceId}&filters=${filtri}&limit=1`);
-    if (!res.ok) throw new Error(`IPA datastore_search HTTP ${res.status}`);
-    const data = (await res.json()) as { success: boolean; result?: { records?: Record<string, string>[] } };
+    type Risposta = { success: boolean; result?: { records?: Record<string, string>[] } };
+    // anche un 200 non JSON (pagina di manutenzione) conta come ricerca fallita
+    const data = res.ok ? ((await res.json().catch(() => undefined)) as Risposta | undefined) : undefined;
+    if (!data?.success) {
+      // probabilmente il resource_id in cache non esiste più: la prossima chiamata lo riscopre
+      cacheResourceId = undefined;
+      throw new Error(`IPA datastore_search fallita (HTTP ${res.status})`);
+    }
     const rec = data.result?.records?.[0];
     if (!rec) return base;
     return {

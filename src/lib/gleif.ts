@@ -8,33 +8,12 @@
  * parte delle società coincide con la partita IVA. Il LEI esiste per le
  * imprese che operano sui mercati finanziari: tipicamente medio-grandi.
  */
+import type { GleifResult, SoggettoCollegato } from "../schemi.js";
 
 const BASE = "https://api.gleif.org/api/v1";
 const REGISTRO_IMPRESE = "RA000407";
-
-export interface SoggettoCollegato {
-  lei: string;
-  denominazione?: string;
-  paese?: string;
-}
-
-export interface GleifResult {
-  fonte: "GLEIF";
-  trovato: boolean;
-  lei?: string;
-  denominazione?: string;
-  forma_giuridica?: string;
-  stato_entita?: string; // ACTIVE | INACTIVE
-  stato_registrazione_lei?: string; // ISSUED | LAPSED | RETIRED | ...
-  lei_aggiornato_al?: string;
-  prossimo_rinnovo_lei?: string;
-  sede_legale?: { indirizzo?: string; cap?: string; comune?: string; paese?: string };
-  controllante_diretta?: SoggettoCollegato | null;
-  capogruppo?: SoggettoCollegato | null;
-  numero_controllate_dirette?: number;
-  servizio_disponibile: boolean;
-  errore?: string;
-}
+/** Codice ELF "altro": il testo vero sta in legalForm.other. */
+const FORMA_ALTRA = "8888";
 
 type LeiRecord = {
   id: string;
@@ -61,7 +40,7 @@ async function getJson<T>(url: string, fetchImpl: typeof fetch): Promise<T | nul
 }
 
 async function formaGiuridica(codice: string | undefined, other: string | null | undefined, fetchImpl: typeof fetch) {
-  if (!codice) return other ?? undefined;
+  if (!codice || codice === FORMA_ALTRA) return other ?? undefined;
   const inCache = cacheFormeGiuridiche.get(codice);
   if (inCache) return inCache;
   try {
@@ -71,7 +50,8 @@ async function formaGiuridica(codice: string | undefined, other: string | null |
     );
     const nomi = d?.data.attributes.names ?? [];
     const nome = (nomi.find((n) => n.languageCode === "it") ?? nomi[0])?.localName;
-    if (nome) cacheFormeGiuridiche.set(codice, nome);
+    // anche un codice sconosciuto (404) va in cache: inutile richiederlo ogni volta
+    cacheFormeGiuridiche.set(codice, nome ?? codice);
     return nome ?? codice;
   } catch {
     return codice;

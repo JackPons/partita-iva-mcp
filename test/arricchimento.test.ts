@@ -4,7 +4,7 @@ import { validaCodiceFiscale, checkCharCodiceFiscale } from "../src/lib/codice-f
 import { validaIban, calcolaCin } from "../src/lib/iban.js";
 import { parseIndirizzoItaliano } from "../src/lib/vies.js";
 import { controllaSanzioni, somiglianza, tokenizza } from "../src/lib/sanzioni.js";
-import { cercaComune, comuneDaCatastale, normalizzaNome, infoTabelle } from "../src/lib/tabelle.js";
+import { cercaComuni, comuneDaCatastale, normalizzaNome, infoTabelle } from "../src/lib/tabelle.js";
 
 test("codice fiscale: comune di nascita dalla tabella", () => {
   const prime15 = "RSSMRA85T10H501";
@@ -47,8 +47,11 @@ test("indirizzo VIES: comune riconosciuto e normalizzato", () => {
 });
 
 test("tabelle: ricerca comune per nome e catastale", () => {
-  assert.equal(cercaComune("roma")?.codice_catastale, "H501");
-  assert.equal(cercaComune("Roma", "MI"), undefined);
+  assert.deepEqual(cercaComuni("roma").map((c) => c.codice_catastale), ["H501"]);
+  assert.deepEqual(cercaComuni("Roma", "MI"), []);
+  // omonimi: senza provincia tornano tutti, con la provincia uno solo
+  assert.deepEqual(cercaComuni("Castro").map((c) => c.provincia).sort(), ["BG", "LE"]);
+  assert.deepEqual(cercaComuni("Castro", "le").map((c) => c.codice_catastale), ["M261"]);
   assert.equal(comuneDaCatastale("h501")?.comune, "Roma");
   assert.equal(normalizzaNome("Società  Città-Più S.r.l."), "SOCIETA CITTA PIU S R L");
 });

@@ -7,7 +7,7 @@
     "url": "https://github.com/JackPons/partita-iva-mcp",
     "source": "github"
   },
-  "version": "0.3.2",
+  "version": "0.6.0",
   "remotes": [
     {
       "type": "streamable-http",

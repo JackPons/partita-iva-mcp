@@ -18,7 +18,7 @@ const record = (lei: string, nome: string, extra: Record<string, unknown> = {}) 
       legalName: { name: nome, language: "it" },
       legalForm: { id: "P418", other: null },
       registeredAt: { id: "RA000407", other: null },
-      registeredAs: "00000000000",
+      registeredAs: "00159560366",
       status: "ACTIVE",
       legalAddress: { addressLines: ["PIAZZA SAN CARLO 156"], city: "TORINO", postalCode: "10121", country: "IT" },
       ...extra,
@@ -27,12 +27,15 @@ const record = (lei: string, nome: string, extra: Record<string, unknown> = {}) 
   },
 });
 
-function fetchGleif(opts: { trovato?: boolean; capogruppo?: boolean; figli?: number; giu?: boolean } = {}): typeof fetch {
+function fetchGleif(
+  opts: { trovato?: boolean; capogruppo?: boolean; figli?: number; giu?: boolean; extra?: Record<string, unknown>; ipaGiu?: boolean } = {},
+): typeof fetch {
   return async (input) => {
     const url = decodeURIComponent(String(input));
     if (opts.giu) return new Response("errore", { status: 503 });
+    if (opts.ipaGiu && url.includes("indicepa")) return new Response("errore", { status: 503 });
     if (url.includes("/lei-records?filter")) {
-      return Response.json({ data: opts.trovato === false ? [] : [record("LEIFIGLIA000000000001", "ESEMPIO SPA")] });
+      return Response.json({ data: opts.trovato === false ? [] : [record("LEIFIGLIA000000000001", "ESEMPIO SPA", opts.extra)] });
     }
     if (url.includes("/entity-legal-forms/P418")) {
       return Response.json({ data: { attributes: { names: [{ localName: "Società Per Azioni", languageCode: "it" }] } } });
@@ -53,7 +56,7 @@ function fetchGleif(opts: { trovato?: boolean; capogruppo?: boolean; figli?: num
 }
 
 test("GLEIF: impresa con LEI, forma giuridica in italiano, capogruppo", async () => {
-  const r = await cercaLei("00000000000", fetchGleif({ capogruppo: true }));
+  const r = await cercaLei("00159560366", fetchGleif({ capogruppo: true }));
   assert.equal(r.trovato, true);
   assert.equal(r.lei, "LEIFIGLIA000000000001");
   assert.equal(r.forma_giuridica, "Società Per Azioni");
@@ -65,20 +68,20 @@ test("GLEIF: impresa con LEI, forma giuridica in italiano, capogruppo", async ()
 });
 
 test("GLEIF: capogruppo di se stessa (nessun controllante, 36 controllate)", async () => {
-  const r = await cercaLei("00000000000", fetchGleif({ capogruppo: false, figli: 36 }));
+  const r = await cercaLei("00159560366", fetchGleif({ capogruppo: false, figli: 36 }));
   assert.equal(r.capogruppo, null);
   assert.equal(r.controllante_diretta, null);
   assert.equal(r.numero_controllate_dirette, 36);
 });
 
 test("GLEIF: nessun LEI è un risultato normale, non un errore", async () => {
-  const r = await cercaLei("00000000000", fetchGleif({ trovato: false }));
+  const r = await cercaLei("00159560366", fetchGleif({ trovato: false }));
   assert.equal(r.trovato, false);
   assert.equal(r.servizio_disponibile, true);
 });
 
 test("GLEIF giù: segnalato, senza far fallire nulla", async () => {
-  const r = await cercaLei("00000000000", fetchGleif({ giu: true }));
+  const r = await cercaLei("00159560366", fetchGleif({ giu: true }));
   assert.equal(r.servizio_disponibile, false);
   assert.match(r.errore!, /GLEIF/);
 });
@@ -90,10 +93,27 @@ test("scheda_soggetto include il blocco GLEIF e il riepilogo lo cita (rispettand
   const client = new Client({ name: "t", version: "0" });
   await client.connect(c);
   await client.listTools(); // abilita la validazione dell'output schema lato client
-  const res = await client.callTool({ name: "scheda_soggetto", arguments: { partita_iva: "00000000000" } });
+  const res = await client.callTool({ name: "scheda_soggetto", arguments: { partita_iva: "00159560366" } });
   assert.notEqual(res.isError, true, JSON.stringify(res.content));
   const out = res.structuredContent as any;
   assert.equal(out.gleif.trovato, true);
   assert.match(out.riepilogo, /LEI LEIFIGLIA000000000001/);
   assert.match(out.riepilogo, /gruppo CAPOGRUPPO SPA/);
+});
+
+test("GLEIF: forma giuridica 8888 ('altro') usa il testo di legalForm.other senza chiamate extra", async () => {
+  const r = await cercaLei("00159560366", fetchGleif({ extra: { legalForm: { id: "8888", other: "CONSORZIO" } } }));
+  assert.equal(r.forma_giuridica, "CONSORZIO");
+});
+
+test("scheda_soggetto: IPA giù è segnalato nel riepilogo anche se GLEIF trova il LEI", async () => {
+  const server = creaServer(fetchGleif({ capogruppo: true, ipaGiu: true }));
+  const [c, s] = InMemoryTransport.createLinkedPair();
+  await server.connect(s);
+  const client = new Client({ name: "t", version: "0" });
+  await client.connect(c);
+  const res = await client.callTool({ name: "scheda_soggetto", arguments: { partita_iva: "00159560366" } });
+  const out = res.structuredContent as any;
+  assert.match(out.riepilogo, /LEI LEIFIGLIA000000000001/);
+  assert.match(out.riepilogo, /IPA non raggiungibile/);
 });

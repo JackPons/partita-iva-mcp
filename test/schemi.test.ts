@@ -67,18 +67,18 @@ test("tutti gli strumenti dichiarano outputSchema e annotazioni read-only", asyn
 
 test("output conformi allo schema: rami ok", async () => {
   const { cl } = await client(fetchOk);
-  await chiama(cl, "valida_partita_iva", { partita_iva: "IT00000000000" });
-  await chiama(cl, "verifica_partita_iva", { partita_iva: "00000000000" });
+  await chiama(cl, "valida_partita_iva", { partita_iva: "IT00159560366" });
+  await chiama(cl, "verifica_partita_iva", { partita_iva: "00159560366" });
   await chiama(cl, "valida_codice_fiscale", { codice_fiscale: cfValido });
-  await chiama(cl, "valida_codice_fiscale", { codice_fiscale: "00000000000" });
+  await chiama(cl, "valida_codice_fiscale", { codice_fiscale: "00159560366" });
   await chiama(cl, "valida_iban", { iban: "DE89 3704 0044 0532 0130 00" });
   await chiama(cl, "valida_iban", { iban: "IT60X0542811101000000123456" });
   await chiama(cl, "cerca_comune", { nome: "Roma" });
   await chiama(cl, "cerca_comune", { codice_catastale: "H501" });
   await chiama(cl, "controlla_sanzioni", { nome: "Esempio Srl" });
-  const scheda = await chiama(cl, "scheda_soggetto", { partita_iva: "00000000000" });
+  const scheda = await chiama(cl, "scheda_soggetto", { partita_iva: "00159560366" });
   assert.equal(scheda.vies.attiva, true);
-  await chiama(cl, "scheda_soggetto", { partita_iva: "00000000000", sanzioni: false });
+  await chiama(cl, "scheda_soggetto", { partita_iva: "00159560366", sanzioni: false });
 });
 
 test("output conformi allo schema: input errati", async () => {
@@ -96,13 +96,13 @@ test("output conformi allo schema: input errati", async () => {
 
 test("output conformi allo schema: fonti esterne giù o soggetto non attivo", async () => {
   const giu = await client(fetchGiu);
-  const a = await chiama(giu.cl, "scheda_soggetto", { partita_iva: "00000000000" });
+  const a = await chiama(giu.cl, "scheda_soggetto", { partita_iva: "00159560366" });
   assert.equal(a.vies.servizio_disponibile, false);
   assert.equal(a.ipa.servizio_disponibile, false);
-  await chiama(giu.cl, "verifica_partita_iva", { partita_iva: "00000000000" });
+  await chiama(giu.cl, "verifica_partita_iva", { partita_iva: "00159560366" });
 
   const na = await client(fetchViesNonAttiva);
-  const b = await chiama(na.cl, "scheda_soggetto", { partita_iva: "00000000000" });
+  const b = await chiama(na.cl, "scheda_soggetto", { partita_iva: "00159560366" });
   assert.equal(b.vies.attiva, false);
   assert.equal(b.sanzioni, null);
 });

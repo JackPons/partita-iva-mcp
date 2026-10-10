@@ -3,14 +3,14 @@ import assert from "node:assert/strict";
 import { validaPartitaIva, checkDigitPartitaIva } from "../src/lib/partita-iva.js";
 import { validaCodiceFiscale, checkCharCodiceFiscale } from "../src/lib/codice-fiscale.js";
 import { validaIban, calcolaCin } from "../src/lib/iban.js";
-import { parseIndirizzoItaliano } from "../src/lib/vies.js";
+import { interrogaVies, parseIndirizzoItaliano } from "../src/lib/vies.js";
 
 test("partita IVA: check digit e normalizzazione", () => {
   // 0000000000 -> somma 0 -> check 0
   assert.equal(checkDigitPartitaIva("0000000000"), 0);
-  const ok = validaPartitaIva("IT 00000000000");
+  const ok = validaPartitaIva("IT 00159560366");
   assert.equal(ok.valida, true);
-  assert.equal(ok.normalizzata, "00000000000");
+  assert.equal(ok.normalizzata, "00159560366");
 
   const corta = validaPartitaIva("123");
   assert.equal(corta.valida, false);
@@ -22,7 +22,7 @@ test("partita IVA: check digit e normalizzazione", () => {
 });
 
 test("partita IVA: codice ufficio 999 segnala non residente", () => {
-  const prime10 = "0000000999";
+  const prime10 = "1234567999";
   const cd = checkDigitPartitaIva(prime10);
   const r = validaPartitaIva(prime10 + cd);
   assert.equal(r.valida, true);
@@ -60,7 +60,7 @@ test("codice fiscale: donna, controllo errato, persona giuridica", () => {
   const errato = validaCodiceFiscale(prime15 + (cf[15] === "A" ? "B" : "A"));
   assert.equal(errato.valido, false);
 
-  const pg = validaCodiceFiscale("00000000000");
+  const pg = validaCodiceFiscale("00159560366");
   assert.equal(pg.tipo, "persona_giuridica");
   assert.equal(pg.valido, true);
 });
@@ -109,4 +109,58 @@ test("parsing indirizzo VIES", () => {
   const q = parseIndirizzoItaliano("PIAZZA DEL DUOMO 2\n20121 MILANO MI");
   assert.equal(q.comune, "Milano");
   assert.equal(q.cap, "20121");
+});
+
+test("partita IVA: matricola nulla rifiutata, ufficio fuori range solo segnalato", () => {
+  assert.match(validaPartitaIva("00000000000").errore!, /Matricola nulla/);
+  const conUfficio = (u: string) => "1234567" + u + checkDigitPartitaIva("1234567" + u);
+  for (const u of ["000", "500"]) {
+    const r = validaPartitaIva(conUfficio(u));
+    assert.equal(r.valida, true);
+    assert.match(r.note!, /non assegnato/);
+  }
+  assert.equal(validaPartitaIva(conUfficio("121")).note, undefined);
+  assert.equal(validaPartitaIva(conUfficio("888")).note, "Gruppo IVA.");
+});
+
+test("codice fiscale numerico di ente (8/9…): valido, senza ufficio", () => {
+  const cf = (p10: string) => p10 + checkDigitPartitaIva(p10);
+  for (const n of [cf("8001234567"), cf("9712345678")]) {
+    const r = validaPartitaIva(n);
+    assert.equal(r.valida, true, n);
+    assert.equal(r.ufficio, undefined);
+    assert.match(r.note!, /ente/);
+    assert.equal(validaCodiceFiscale(n).valido, true);
+  }
+});
+
+test("VIES: tra comuni omonimi sceglie quello della provincia indicata", () => {
+  for (const [riga, provincia, catastale] of [
+    ["22010 PEGLIO CO", "CO", "G415"],
+    ["61049 PEGLIO PU", "PU", "G416"],
+    ["24060 CASTRO BG", "BG", "C337"],
+    ["73030 CASTRO LE", "LE", "M261"],
+    ["98030 SAN TEODORO ME", "ME", "I328"],
+  ]) {
+    const r = parseIndirizzoItaliano(`VIA ROMA 1 \n${riga}\n`);
+    assert.equal(r.comune_riconosciuto, true, riga);
+    assert.equal(r.provincia, provincia);
+    assert.equal(r.codice_catastale, catastale);
+  }
+  // provincia che non corrisponde a nessuno degli omonimi: niente aggancio
+  assert.equal(parseIndirizzoItaliano("VIA ROMA 1 \n00100 CASTRO RM\n").comune_riconosciuto, false);
+});
+
+test("codice fiscale: la data di nascita deve esistere", () => {
+  const cf = (p15: string) => p15 + checkCharCodiceFiscale(p15);
+  assert.match(validaCodiceFiscale(cf("RSSMRA80B31H501")).errore!, /Giorno/); // 31 febbraio
+  assert.match(validaCodiceFiscale(cf("RSSMRA80D31H501")).errore!, /Giorno/); // 31 aprile
+  assert.equal(validaCodiceFiscale(cf("RSSMRA80B29H501")).dati?.data_nascita, "1980-02-29"); // bisestile
+  assert.equal(validaCodiceFiscale(cf("RSSMRA81B69H501")).valido, false); // 29 feb 1981, donna
+});
+
+test("VIES: una pagina HTML con status 200 è 'non disponibile', non un'eccezione", async () => {
+  const r = await interrogaVies("00159560366", async () => new Response("<html>manutenzione</html>", { status: 200 }));
+  assert.equal(r.servizio_disponibile, false);
+  assert.match(r.errore!, /non JSON/);
 });

@@ -5,31 +5,8 @@
  *
  * Doc: https://ec.europa.eu/taxation_customs/vies/#/technical-information
  */
-import { cercaComune } from "./tabelle.js";
-
-export interface ViesResult {
-  fonte: "VIES";
-  interrogato_il: string;
-  paese: string;
-  partita_iva: string;
-  attiva: boolean;
-  denominazione?: string;
-  indirizzo_grezzo?: string;
-  indirizzo?: IndirizzoParsato;
-  servizio_disponibile: boolean;
-  errore?: string;
-}
-
-export interface IndirizzoParsato {
-  via?: string;
-  cap?: string;
-  comune?: string;
-  provincia?: string;
-  regione?: string;
-  codice_catastale?: string;
-  codice_istat?: string;
-  comune_riconosciuto: boolean;
-}
+import { cercaComuni } from "./tabelle.js";
+import type { IndirizzoParsato, ViesResult } from "../schemi.js";
 
 const VIES_URL = "https://ec.europa.eu/taxation_customs/vies/rest-api/check-vat-number";
 
@@ -52,7 +29,8 @@ export function parseIndirizzoItaliano(raw: string): IndirizzoParsato {
     }
   }
   if (out.comune) {
-    const c = cercaComune(out.comune, out.provincia);
+    const trovati = cercaComuni(out.comune, out.provincia);
+    const c = trovati.length === 1 ? trovati[0] : undefined; // omonimi senza provincia: non indoviniamo
     if (c) {
       out.comune = c.comune; // forma canonica ISTAT
       out.regione = c.regione;
@@ -93,13 +71,13 @@ export async function interrogaVies(
     return { ...base, servizio_disponibile: false, errore: `VIES ha risposto HTTP ${res.status}` };
   }
 
-  const data = (await res.json()) as {
-    valid?: boolean;
-    name?: string;
-    address?: string;
-    userError?: string;
-    requestDate?: string;
-  };
+  let data: { valid?: boolean; name?: string; address?: string; userError?: string; requestDate?: string };
+  try {
+    data = await res.json();
+  } catch {
+    // capita una pagina HTML di manutenzione con status 200
+    return { ...base, servizio_disponibile: false, errore: "VIES ha risposto con un contenuto non JSON" };
+  }
 
   // VIES segnala indisponibilità del paese con userError (es. MS_UNAVAILABLE)
   if (data.userError && data.userError !== "VALID" && data.userError !== "INVALID") {

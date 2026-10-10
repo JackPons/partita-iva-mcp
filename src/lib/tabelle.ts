@@ -26,7 +26,7 @@ export interface SoggettoSanzionato {
 const comuni = comuniJson.comuni as Record<string, Comune>;
 const stati = statiJson.stati as Record<string, string>;
 const abi = abiJson.abi as Record<string, string>;
-const sanzioni = sanzioniJson.soggetti as SoggettoSanzionato[];
+export const sanzioni = sanzioniJson.soggetti as SoggettoSanzionato[];
 
 export const infoTabelle = {
   comuni: { fonte: comuniJson._fonte, voci: Object.keys(comuni).length },
@@ -47,19 +47,25 @@ export function bancaDaAbi(codice: string): string | undefined {
   return abi[codice];
 }
 
-/** Ricerca comune per nome (case-insensitive, esatta), opzionalmente filtrata per provincia. */
-export function cercaComune(nome: string, provincia?: string): (Comune & { codice_catastale: string }) | undefined {
-  const n = normalizzaNome(nome);
-  for (const [codice, c] of Object.entries(comuni)) {
-    if (normalizzaNome(c.comune) === n && (!provincia || c.provincia === provincia.toUpperCase())) {
-      return { ...c, codice_catastale: codice };
+export type ComuneConCodice = Comune & { codice_catastale: string };
+
+let perNome: Map<string, ComuneConCodice[]> | undefined;
+
+/**
+ * Comuni con quel nome (senza badare a maiuscole e accenti), filtrati per
+ * provincia se indicata. Più di un risultato = omonimi da disambiguare.
+ */
+export function cercaComuni(nome: string, provincia?: string): ComuneConCodice[] {
+  if (!perNome) {
+    perNome = new Map();
+    for (const [codice, c] of Object.entries(comuni)) {
+      const k = normalizzaNome(c.comune);
+      if (!perNome.has(k)) perNome.set(k, []);
+      perNome.get(k)!.push({ ...c, codice_catastale: codice });
     }
   }
-  return undefined;
-}
-
-export function listaSanzioni(): SoggettoSanzionato[] {
-  return sanzioni;
+  const tutti = perNome.get(normalizzaNome(nome)) ?? [];
+  return provincia ? tutti.filter((c) => c.provincia === provincia.toUpperCase()) : tutti;
 }
 
 export function normalizzaNome(s: string): string {

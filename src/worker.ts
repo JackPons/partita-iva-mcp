@@ -21,7 +21,6 @@ import {
   statistiche,
   tokenValido,
   type DbMinimo,
-  type Esito,
   type RateLimiterMinimo,
 } from "./telemetria.js";
 
@@ -89,9 +88,20 @@ export function conAcceptCompleto(request: Request): Request {
   return new Request(request, { headers });
 }
 
+/**
+ * Sale usato se HASH_SALT non è configurato: casuale e mai salvato. Serve
+ * solo come chiave del rate limit; in D1 l'utente non viene registrato,
+ * perché con un sale diverso per istanza i conteggi sarebbero gonfiati.
+ * Generato alla prima richiesta: nel global scope dei Workers non si
+ * possono creare valori casuali.
+ */
+let saleEffimero: string | undefined;
+
 async function gestisciMcp(request: Request, env: Env, ctx: Ctx): Promise<Response> {
   const inizio = Date.now();
-  const contesto = await contestoDaRichiesta(request, env.HASH_SALT ?? "partita-iva-mcp");
+  const contesto = await contestoDaRichiesta(request, env.HASH_SALT || (saleEffimero ??= crypto.randomUUID()));
+  const chiaveLimite = contesto.utente!;
+  if (!env.HASH_SALT) contesto.utente = null;
 
   let eventi: ReturnType<typeof estraiEventi> = [];
   if (request.method === "POST") {
@@ -102,7 +112,7 @@ async function gestisciMcp(request: Request, env: Env, ctx: Ctx): Promise<Respon
     }
   }
 
-  if (!(await controllaLimite(env.LIMITER, contesto.utente))) {
+  if (!(await controllaLimite(env.LIMITER, chiaveLimite))) {
     ctx.waitUntil(registra(env.DB, contesto, eventi, "limitato", Date.now() - inizio));
     return jsonRpcErrore(429, -32000, "Troppe richieste: riprova tra un minuto.");
   }
@@ -122,14 +132,13 @@ async function gestisciMcp(request: Request, env: Env, ctx: Ctx): Promise<Respon
 
   // leggiamo il body una volta: serve sia per l'esito sia per rispondere
   const testo = response.body ? await response.text() : "";
-  let esito: Esito = response.status >= 400 ? "errore" : "ok";
-  if (testo) {
-    try {
-      esito = esitoDaRisposta(response.status, JSON.parse(testo));
-    } catch {
-      /* non JSON: teniamo l'esito dallo status */
-    }
+  let corpo: unknown = null;
+  try {
+    corpo = JSON.parse(testo);
+  } catch {
+    /* vuoto o non JSON: esitoDaRisposta ripiega sullo status */
   }
+  const esito = esitoDaRisposta(response.status, corpo);
   ctx.waitUntil(registra(env.DB, contesto, eventi, esito, Date.now() - inizio));
 
   const headers = new Headers(response.headers);

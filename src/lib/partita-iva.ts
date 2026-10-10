@@ -4,15 +4,7 @@
  * identificati direttamente, 888 per gruppi IVA), l'ultima è il check digit
  * calcolato con un algoritmo di tipo Luhn.
  */
-
-export interface PartitaIvaCheck {
-  input: string;
-  normalizzata: string;
-  valida: boolean;
-  errore?: string;
-  ufficio?: string;
-  note?: string;
-}
+import type { PartitaIvaCheck } from "../schemi.js";
 
 export function normalizzaPartitaIva(raw: string): string {
   return raw.trim().toUpperCase().replace(/^IT/, "").replace(/[\s.-]/g, "");
@@ -44,11 +36,24 @@ export function validaPartitaIva(raw: string): PartitaIvaCheck {
     return { ...base, errore: `Carattere di controllo errato (atteso ${atteso}).` };
   }
 
+  if (normalizzata.startsWith("0000000")) {
+    return { ...base, errore: "Matricola nulla: non è una partita IVA assegnabile." };
+  }
+  // Codici fiscali numerici di enti (comuni, ASL, scuole, associazioni): iniziano
+  // per 8 o 9, hanno lo stesso check digit ma le cifre 8-10 non sono un ufficio.
+  if (/^[89]/.test(normalizzata)) {
+    return { ...base, valida: true, note: "Codice fiscale numerico di un ente (inizia per 8 o 9): le cifre 8-10 non indicano un ufficio." };
+  }
+  // uffici: 001-100 e 120-121 provinciali, 888 gruppi IVA, 999 non residenti.
+  // Un ufficio fuori range è solo una nota: rifiutare un identificativo vero
+  // costa più che accettarne uno strano.
   const ufficio = normalizzata.slice(7, 10);
+  const u = Number(ufficio);
   let note: string | undefined;
-  if (ufficio === "999") note = "Soggetto non residente identificato direttamente in Italia.";
-  else if (ufficio === "888") note = "Gruppo IVA.";
-  else if (Number(ufficio) > 100 && Number(ufficio) < 120) note = "Codice ufficio provinciale non standard.";
+  if (u === 999) note = "Soggetto non residente identificato direttamente in Italia.";
+  else if (u === 888) note = "Gruppo IVA.";
+  else if (u === 0 || u > 121) note = `Codice ufficio ${ufficio} non assegnato: verifica il numero.`;
+  else if (u > 100 && u < 120) note = "Codice ufficio provinciale non standard.";
 
   return { ...base, valida: true, ufficio, note };
 }

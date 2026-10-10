@@ -5,31 +5,14 @@
  * NON è un sistema AML certificato: serve a sollevare una bandierina,
  * la verifica vera resta a un operatore e a un provider specializzato.
  */
-import { listaSanzioni, normalizzaNome, infoTabelle, type SoggettoSanzionato } from "./tabelle.js";
+import { sanzioni, normalizzaNome, infoTabelle, type SoggettoSanzionato } from "./tabelle.js";
+import type { EsitoSanzioni, MatchSanzione } from "../schemi.js";
 
 const FORME_SOCIETARIE = new Set([
   "SRL", "SPA", "SAS", "SNC", "SRLS", "SCARL", "SCRL", "SOC", "SOCIETA", "COOP", "COOPERATIVA",
   "LTD", "LLC", "INC", "CORP", "CO", "GMBH", "AG", "SA", "SARL", "BV", "NV", "PLC", "OOO", "JSC", "PJSC",
   "THE", "OF", "AND", "DI", "DEL", "DELLA", "DEI", "DELLE", "E",
 ]);
-
-export interface MatchSanzione {
-  id: string;
-  tipo: string;
-  nome_in_lista: string;
-  programmi: string[];
-  punteggio: number;
-}
-
-export interface EsitoSanzioni {
-  fonte: "Lista consolidata sanzioni UE";
-  lista_aggiornata_al: string | null;
-  voci_in_lista: number;
-  nome_cercato: string;
-  soglia: number;
-  possibili_corrispondenze: MatchSanzione[];
-  esito: "nessuna_corrispondenza" | "da_verificare" | "lista_non_caricata";
-}
 
 export function tokenizza(nome: string): string[] {
   return normalizzaNome(nome)
@@ -50,19 +33,19 @@ export function somiglianza(a: string[], b: string[]): number {
   return contenuto ? Math.max(dice, 0.85) : dice;
 }
 
-export function controllaSanzioni(
-  nome: string,
-  opzioni: { soglia?: number; massimo?: number; lista?: SoggettoSanzionato[] } = {},
-): EsitoSanzioni {
+const MASSIMO_RISULTATI = 5;
+
+/** Token dei nomi in lista, calcolati alla prima ricerca e poi riusati. */
+let indice: { s: SoggettoSanzionato; nomi: { nome: string; tokens: string[] }[] }[] | undefined;
+
+export function controllaSanzioni(nome: string, opzioni: { soglia?: number } = {}): EsitoSanzioni {
   const soglia = opzioni.soglia ?? 0.8;
-  const massimo = opzioni.massimo ?? 5;
-  const lista = opzioni.lista ?? listaSanzioni();
   const tokens = tokenizza(nome);
 
   const base: EsitoSanzioni = {
     fonte: "Lista consolidata sanzioni UE",
     lista_aggiornata_al: infoTabelle.sanzioni.aggiornato,
-    voci_in_lista: lista.length,
+    voci_in_lista: sanzioni.length,
     nome_cercato: nome,
     soglia,
     possibili_corrispondenze: [],
@@ -73,12 +56,13 @@ export function controllaSanzioni(
     return { ...base, esito: "lista_non_caricata" };
   }
 
+  indice ??= sanzioni.map((s) => ({ s, nomi: s.nomi.map((n) => ({ nome: n, tokens: tokenizza(n) })) }));
   const trovati: MatchSanzione[] = [];
-  for (const s of lista) {
+  for (const { s, nomi } of indice) {
     let migliore = 0, nomeMigliore = "";
-    for (const n of s.nomi) {
-      const p = somiglianza(tokens, tokenizza(n));
-      if (p > migliore) { migliore = p; nomeMigliore = n; }
+    for (const n of nomi) {
+      const p = somiglianza(tokens, n.tokens);
+      if (p > migliore) { migliore = p; nomeMigliore = n.nome; }
     }
     if (migliore >= soglia) {
       trovati.push({ id: s.id, tipo: s.tipo, nome_in_lista: nomeMigliore, programmi: s.programmi, punteggio: Number(migliore.toFixed(2)) });
@@ -88,7 +72,7 @@ export function controllaSanzioni(
 
   return {
     ...base,
-    possibili_corrispondenze: trovati.slice(0, massimo),
+    possibili_corrispondenze: trovati.slice(0, MASSIMO_RISULTATI),
     esito: trovati.length ? "da_verificare" : "nessuna_corrispondenza",
   };
 }

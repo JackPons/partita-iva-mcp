@@ -7,7 +7,8 @@ import { interrogaVies } from "./lib/vies.js";
 import { cercaInIpa } from "./lib/ipa.js";
 import { cercaLei } from "./lib/gleif.js";
 import { controllaSanzioni } from "./lib/sanzioni.js";
-import { cercaComune, comuneDaCatastale, infoTabelle } from "./lib/tabelle.js";
+import { cercaComuni, comuneDaCatastale, infoTabelle } from "./lib/tabelle.js";
+import pkg from "../package.json" with { type: "json" };
 import {
   ANNOTAZIONI_OFFLINE,
   ANNOTAZIONI_ONLINE,
@@ -22,7 +23,7 @@ import {
 
 export const SERVER_INFO = {
   name: "partita-iva-mcp",
-  version: "0.5.0",
+  version: pkg.version,
 };
 
 function json(payload: unknown) {
@@ -32,10 +33,20 @@ function json(payload: unknown) {
   };
 }
 
+/** Tempo massimo per tutte le chiamate esterne di un singolo strumento. */
+const SCADENZA_MS = 8000;
+
 /**
  * Costruisce il server. `fetchImpl` è iniettabile per i test.
  */
 export function creaServer(fetchImpl: typeof fetch = fetch): McpServer {
+  // una scadenza unica per invocazione: le chiamate in sequenza (IPA, GLEIF)
+  // non sommano i propri timeout, e una fonte appesa diventa "non raggiungibile"
+  const conScadenza = (): typeof fetch => {
+    const signal = AbortSignal.timeout(SCADENZA_MS);
+    return (input, init) => fetchImpl(input, { ...init, signal });
+  };
+
   const server = new McpServer(SERVER_INFO, {
     instructions:
       "Strumenti per verificare identificativi italiani (partita IVA, codice fiscale, IBAN) " +
@@ -84,8 +95,18 @@ export function creaServer(fetchImpl: typeof fetch = fetch): McpServer {
         return json(c ? { trovato: true, codice_catastale: codice_catastale.toUpperCase(), ...c } : { trovato: false, tabella: infoTabelle.comuni });
       }
       if (nome) {
-        const c = cercaComune(nome, provincia);
-        return json(c ? { trovato: true, ...c } : { trovato: false, tabella: infoTabelle.comuni });
+        const trovati = cercaComuni(nome, provincia);
+        if (trovati.length === 0) return json({ trovato: false, tabella: infoTabelle.comuni });
+        if (trovati.length > 1) {
+          return json({
+            trovato: false,
+            errore: provincia
+              ? `Più comuni si chiamano ${trovati[0].comune} anche in provincia ${provincia.toUpperCase()}: scegli dal codice catastale.`
+              : `Più comuni si chiamano ${trovati[0].comune}: indica la provincia.`,
+            omonimi: trovati.map((c) => ({ provincia: c.provincia, codice_catastale: c.codice_catastale })),
+          });
+        }
+        return json({ trovato: true, ...trovati[0] });
       }
       return json({ trovato: false, errore: "Indica nome o codice_catastale." });
     },
@@ -120,7 +141,7 @@ export function creaServer(fetchImpl: typeof fetch = fetch): McpServer {
     async ({ partita_iva }) => {
       const formale = validaPartitaIva(partita_iva);
       if (!formale.valida) return json({ formale, vies: null });
-      const vies = await interrogaVies(formale.normalizzata, fetchImpl);
+      const vies = await interrogaVies(formale.normalizzata, conScadenza());
       return json({ formale, vies });
     },
   );
@@ -177,10 +198,11 @@ export function creaServer(fetchImpl: typeof fetch = fetch): McpServer {
       if (!formale.valida) {
         return json({ formale, vies: null, ipa: null, gleif: null, sanzioni: null, riepilogo: "Partita IVA formalmente non valida: nessuna fonte interrogata." });
       }
+      const f = conScadenza();
       const [vies, ipa, gleif] = await Promise.all([
-        interrogaVies(formale.normalizzata, fetchImpl),
-        cercaInIpa(formale.normalizzata, fetchImpl),
-        cercaLei(formale.normalizzata, fetchImpl),
+        interrogaVies(formale.normalizzata, f),
+        cercaInIpa(formale.normalizzata, f),
+        cercaLei(formale.normalizzata, f),
       ]);
       const esitoSanzioni = sanzioni !== false && vies.denominazione ? controllaSanzioni(vies.denominazione) : null;
 
@@ -189,13 +211,13 @@ export function creaServer(fetchImpl: typeof fetch = fetch): McpServer {
       else parti.push(vies.attiva ? `partita IVA attiva${vies.denominazione ? ` (${vies.denominazione})` : ""}` : "partita IVA NON attiva su VIES");
       if (vies.indirizzo?.comune_riconosciuto) parti.push(`sede a ${vies.indirizzo.comune} (${vies.indirizzo.provincia})`);
       if (ipa.e_pubblica_amministrazione) parti.push(`Pubblica Amministrazione, codice IPA ${ipa.codice_ipa}`);
+      else if (!ipa.servizio_disponibile) parti.push("IPA non raggiungibile");
       if (gleif.trovato) {
         let g = `LEI ${gleif.lei}${gleif.stato_registrazione_lei && gleif.stato_registrazione_lei !== "ISSUED" ? ` (stato ${gleif.stato_registrazione_lei})` : ""}`;
         if (gleif.capogruppo && gleif.capogruppo.lei !== gleif.lei) g += `, parte del gruppo ${gleif.capogruppo.denominazione ?? gleif.capogruppo.lei}`;
         else if (gleif.numero_controllate_dirette) g += `, controlla ${gleif.numero_controllate_dirette} società`;
         parti.push(g);
-      }
-      else if (!ipa.servizio_disponibile) parti.push("IPA non raggiungibile");
+      } else if (!gleif.servizio_disponibile) parti.push("GLEIF non raggiungibile");
       if (esitoSanzioni?.esito === "da_verificare") parti.push(`ATTENZIONE: ${esitoSanzioni.possibili_corrispondenze.length} possibili corrispondenze in lista sanzioni UE`);
       else if (esitoSanzioni?.esito === "lista_non_caricata") parti.push("lista sanzioni non caricata");
 

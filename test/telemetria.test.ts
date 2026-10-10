@@ -121,7 +121,7 @@ test("worker: una tools/call viene servita e registrata senza argomenti", async 
   const { ctx, finito } = ctxFinto();
   const res = await worker.fetch(
     richiestaMcp({ jsonrpc: "2.0", id: 1, method: "tools/call", params: { name: "valida_iban", arguments: { iban: "DE89370400440532013000" } } }),
-    { DB: db },
+    { DB: db, HASH_SALT: "sale" },
     ctx,
   );
   assert.equal(res.status, 200);
@@ -242,4 +242,13 @@ test("worker: senza header Accept del tutto viene servito", async () => {
     ctx,
   );
   assert.equal(res.status, 200);
+});
+
+test("worker: senza HASH_SALT l'utente non viene registrato", async () => {
+  const { db, righe } = dbFinto();
+  const { ctx, finito } = ctxFinto();
+  await worker.fetch(richiestaMcp({ jsonrpc: "2.0", id: 1, method: "tools/list" }), { DB: db }, ctx);
+  await finito();
+  assert.equal(righe.length, 1);
+  assert.equal(righe[0][6], null);
 });
